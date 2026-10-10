@@ -1,6 +1,6 @@
 # Contributing
 
-Work on `dev` or a feature branch based on it. Use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `ci:`). Keep changes scoped and runnable.
+Create a feature branch from `dev` and submit one functional module per PR targeting `dev`. The maintainer merges manually. Do not push implementation directly to `dev` or merge PRs automatically. GitHub's `delete_branch_on_merge` setting removes merged feature branches; `dev` remains the long-lived base. Use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `ci:`).
 
 Use strict TypeScript, explicit IPC contracts and Rust-owned file content. Components must not load complete disk files. Never log document content, paths or clipboard data for telemetry.
 
