@@ -62,6 +62,7 @@ import { RecordCard } from "./components/RecordCard";
 import type { TreeState } from "./components/tree/JsonTree";
 import i18n, { systemLanguage } from "./i18n";
 import { sample } from "./sample";
+import packageInfo from "../package.json";
 
 export default function App() {
   const { t } = useTranslation();
@@ -1083,7 +1084,7 @@ export default function App() {
           </main>
           <footer className="statusbar">
             <span>{t("readOnly")}</span>
-            <span>JSONL Studio 0.1.0</span>
+            <span>JSONL Studio {packageInfo.version}</span>
           </footer>
         </>
       )}
