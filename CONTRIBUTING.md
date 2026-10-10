@@ -8,4 +8,4 @@ Before a PR run the commands in README: frontend lint/format/test/build, Playwri
 
 New file semantics must have Rust regression tests; frontend tests should verify user-visible behavior. Performance claims require reproducible benchmark inputs and measured results. Do not commit generated large datasets, binaries, target directories or signing credentials.
 
-M2 changes require user acceptance of M1. Release tags require platform qualification; a passing browser test does not prove native Finder/file association behavior.
+M1 was accepted and M2 is authorized. Release tags require platform qualification; a passing browser test does not prove native Finder/file association behavior.

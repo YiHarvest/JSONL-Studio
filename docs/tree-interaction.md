@@ -8,7 +8,7 @@
 - Objects and arrays both initially show up to 50 children; Load 50 more reveals the next batch.
 - Each row displays key/index, explicit type, child count and preview or scalar token.
 - Copy menu provides key, decoded string value / scalar or container JSON, JSONPath and node JSON.
-- Node search and edit menus will be introduced alongside the M2 backend features.
+- Node menus can fill the search field with the key or open the containing record in CodeMirror. Search results expand, reveal and highlight the matching pointer.
 - Folding is keyed by physical line and escaped JSON Pointer, scoped to the current session. It is not written into user files or preferences.
 - Record header and per-node folding survive virtualization within the current session.
 - Tree flattening guards at 10,000 rows; huge records remain readable through Raw views within the record preview limit.

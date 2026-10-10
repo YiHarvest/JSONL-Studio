@@ -17,7 +17,7 @@ Rust `core::Session` owns the authoritative source: disk path plus metadata fing
 
 The initial design proposed `memmap2`; M1 deliberately uses seek/read and a buffered index. A mapping of a mutable external file can fault when another process truncates it. Buffered reads fail normally, and stamps checked before/after indexing and reading reject stale snapshots. mmap can be evaluated later with a documented safe snapshot strategy and benchmarks.
 
-Tauri state contains an `Arc<Session>`, so page and validation tasks clone a cheap handle and run outside the event loop. A completed open/import atomically replaces the session. `pending_files` retains startup activation until the frontend subscribes. The single-instance plugin routes subsequent Linux launches. macOS opened-file events use file URL conversion.
+Tauri state contains an `Arc<Mutex<Document>>`. The document references an `Arc<Session>` plus ordered source ranges and added record buffers. Reads, edits and saves run outside the event loop. Search clones a document snapshot and releases the lock before scanning. A completed open/import replaces the document. `pending_files` retains startup activation until the frontend subscribes. The single-instance plugin routes subsequent Linux launches. macOS opened-file events use file URL conversion.
 
 React owns a bounded page plus preferences, virtualizer state and per-line folding. It never reads a disk file with browser APIs. Both record cards and tree rows are virtualized. Parsed trees exist for mounted record cards only. Nodes are flattened from expanded children, with 50-child increments.
 
@@ -38,11 +38,11 @@ React owns a bounded page plus preferences, virtualizer state and per-line foldi
 
 Index memory is O(lines), approximately 8 bytes per line before allocator spare capacity. Source bytes stay on disk. IPC input budget is 8 MiB, with bounded extra JSON/string serialization overhead. Tree depth is at most 128; flattened visible rows are guarded at 10,000. Children are loaded in batches of 50.
 
-All-mode currently navigates bounded windows rather than maintaining an unbounded page cache. Full-file validation is manual and runs in a background task; cancellation/progress and whole-file search belong in M2.
+All-mode navigates bounded windows rather than maintaining an unbounded page cache. Full-file validation is manual and runs in a background task. M2 search scans bounded batches with progress and a stop control.
 
-## M2 extension points
+## M2 implementation
 
-Session Manager can add immutable source revisions and stable record IDs. Edit Buffer must keep edits in Rust, not mutate frontend pages as truth. Atomic Writer must use a same-directory temporary file, preserve permissions/newline policy, flush and fsync, recheck the external fingerprint, then atomically replace. Recovery must persist unsaved changes separately, with explicit discard and save choices.
+`document.rs` owns revision-checked edits, source-piece serialization, bounded search, atomic Save/Save As and recovery checkpoints. See [M2 contracts](m2.md) for byte preservation, destination conflict handling, source metadata checks and recovery limitations. Frontend CodeMirror is loaded on demand and never owns the full disk document.
 
 ## Privacy
 

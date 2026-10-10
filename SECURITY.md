@@ -1,6 +1,6 @@
 # Security
 
-JSONL Studio processes documents locally. It contains no telemetry or upload feature. M1 reads disk files and creates bounded session-only imports; it does not write source files.
+JSONL Studio processes documents locally. It contains no telemetry or upload feature. M2 writes only user-selected JSONL/NDJSON destinations and a local recovery checkpoint. Save streams into a temporary file before atomic replacement; recovery contains sensitive document edits and remains in the user's local application-data directory.
 
 Supported security fixes target the latest release and `dev`.
 

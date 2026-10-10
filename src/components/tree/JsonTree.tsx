@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight, MoreHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -8,6 +8,7 @@ export interface TreeState {
   open: Map<string, boolean>;
   limits: Map<string, number>;
   collapsed?: boolean;
+  hit?: string;
 }
 interface Row {
   path: string;
@@ -22,11 +23,15 @@ export function JsonTree({
   state,
   defaultDepth,
   copy,
+  edit,
+  search,
 }: {
   root: JsonNode;
   state: TreeState;
   defaultDepth: number;
   copy: (text: string) => void;
+  edit: () => void;
+  search: (text: string) => void;
 }) {
   const { t } = useTranslation();
   const [version, update] = useState(0);
@@ -49,7 +54,16 @@ export function JsonTree({
       result.push({ node, key, path, jsonPath, depth });
       if (!node.children || !(state.open.get(path) ?? depth < defaultDepth))
         return;
-      const limit = state.limits.get(path) ?? 50;
+      let limit = state.limits.get(path) ?? 50;
+      if (state.hit !== undefined) {
+        const target = node.children.findIndex(({ key }) => {
+          const child = pointer(path, key);
+          return state.hit === child || state.hit?.startsWith(`${child}/`);
+        });
+        if (target >= limit)
+          limit = Math.min(10000, Math.ceil((target + 1) / 50) * 50);
+        state.limits.set(path, limit);
+      }
       node.children.slice(0, limit).forEach(({ key, node: child }) => {
         visit(
           child,
@@ -80,6 +94,11 @@ export function JsonTree({
     estimateSize: () => 28,
     overscan: 8,
   });
+  useEffect(() => {
+    if (state.hit === undefined) return;
+    const index = rows.findIndex((row) => row.path === state.hit);
+    if (index >= 0) virtual.scrollToIndex(index, { align: "center" });
+  }, [rows, state.hit, virtual]);
   const toggle = (row: Row, recursive: boolean) => {
     const open = !isOpen(row.path, row.depth);
     state.open.set(row.path, open);
@@ -142,7 +161,7 @@ export function JsonTree({
           return (
             <div
               key={row.path}
-              className="tree-row"
+              className={`tree-row ${state.hit === row.path ? "search-hit" : ""}`}
               role="treeitem"
               aria-level={row.depth + 1}
               aria-expanded={container ? opened : undefined}
@@ -236,6 +255,26 @@ export function JsonTree({
                       {label}
                     </button>
                   ))}
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      search(
+                        row.key === "$" ? row.node.text.slice(0, 200) : row.key,
+                      );
+                      setMenu(null);
+                    }}
+                  >
+                    {t("fileSearch")}
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      edit();
+                      setMenu(null);
+                    }}
+                  >
+                    {t("edit")}
+                  </button>
                 </div>
               )}
             </div>

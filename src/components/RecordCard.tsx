@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
-import { ChevronRight, Copy, CircleAlert, Braces } from "lucide-react";
+import {
+  ChevronRight,
+  Copy,
+  CircleAlert,
+  Braces,
+  Pencil,
+  CopyPlus,
+  Trash2,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   parseTree,
@@ -16,12 +24,22 @@ export function RecordCard({
   treeState,
   depth,
   copy,
+  edit,
+  duplicate,
+  remove,
+  disabled,
+  search,
 }: {
   record: RecordData;
   mode: ViewMode;
   treeState: TreeState;
   depth: number;
   copy: (text: string) => void;
+  edit: () => void;
+  duplicate: () => void;
+  remove: () => void;
+  disabled: boolean;
+  search: (text: string) => void;
 }) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(treeState.collapsed ?? false);
@@ -38,6 +56,30 @@ export function RecordCard({
       data-line={record.line}
     >
       <header className="record-header">
+        <button
+          className="icon-button"
+          disabled={disabled || record.truncated}
+          aria-label={`${t("edit")} L${record.line}`}
+          onClick={edit}
+        >
+          <Pencil size={13} />
+        </button>
+        <button
+          className="icon-button"
+          disabled={disabled || record.truncated}
+          aria-label={`${t("duplicate")} L${record.line}`}
+          onClick={duplicate}
+        >
+          <CopyPlus size={13} />
+        </button>
+        <button
+          className="icon-button"
+          disabled={disabled}
+          aria-label={`${t("delete")} L${record.line}`}
+          onClick={remove}
+        >
+          <Trash2 size={13} />
+        </button>
         <button
           className={`disclosure ${collapsed ? "" : "opened"}`}
           aria-label={`${collapsed ? t("expand") : t("collapse")} ${record.line}`}
@@ -91,6 +133,8 @@ export function RecordCard({
             state={treeState}
             defaultDepth={depth}
             copy={copy}
+            edit={edit}
+            search={search}
           />
         ) : (
           <pre className={`record-raw ${mode === "wrap" ? "wrapped" : ""}`}>

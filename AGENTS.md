@@ -1,6 +1,6 @@
 # Engineering conventions
 
-- Current authorized scope: M0 + M1. Do not implement M2 editing/save until the user approves the M1 result.
+- Current authorized scope: M0 + M1 + M2. User approved continuation after reviewing M1.
 - Rust is the only source of truth for desktop document contents.
 - Keep IPC and rendering bounded. All-mode must not load a complete file into JavaScript.
 - Preserve numeric source tokens and physical line identity.

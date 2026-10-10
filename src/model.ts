@@ -7,6 +7,21 @@ export interface Info {
   newline: string;
   encoding: string;
   scratch: boolean;
+  dirty: boolean;
+  revision: number;
+}
+export type Edit =
+  | { kind: "replace" | "insert"; line: number; text: string }
+  | { kind: "delete" | "duplicate"; line: number };
+export interface SearchHit {
+  line: number;
+  pointer: string;
+  preview: string;
+}
+export interface SearchPage {
+  hits: SearchHit[];
+  nextLine: number;
+  hasMore: boolean;
 }
 export interface RecordData {
   line: number;

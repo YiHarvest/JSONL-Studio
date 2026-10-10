@@ -16,6 +16,16 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 - CLI activation of the real 100 MiB file rendered 100 tree records and the correct 93,633-line index in WebKitGTK.
 - Benchmark generator passed ruff and black checks. Prettier formatting check passed.
 
+## M2 checks
+
+- M2 frontend lint, strict TypeScript and production build passed; CodeMirror is a separate lazy-loaded chunk.
+- Playwright: all 4 scenarios passed, including invalid edit rejection, large-integer editing, duplicate/delete/add and full-document search with pointer expansion.
+- Rust: 16 tests cover baseline reading plus edit sequencing, source and destination conflict refusal, failed writes, recovery roundtrip, stale revisions, invalid bytes, BOM insertion and Unix permissions/symlink protection.
+- Full desktop build and clippy checks run on local Arch Linux. Browser tests use bounded preview inputs; disk saving and recovery correctness are verified by Rust filesystem tests.
+- Embedded-resource desktop build passed. Initial Xvfb snapshots were incomplete with DRI3 warnings; enabling `WEBKIT_DISABLE_DMABUF_RENDERER=1` and `LIBGL_ALWAYS_SOFTWARE=1` rendered the full Chinese/system-dark M2 window successfully. This verifies software rendering, not GPU performance.
+- Recovery requires the original disk source to remain available and unchanged. Unapplied CodeMirror drafts are not checkpointed.
+- M1 performance measurements below remain unchanged; M2 does not certify the existing latency, FPS or full-app memory targets.
+
 ## Reproduce benchmarks
 
 ```fish

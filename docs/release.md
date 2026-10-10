@@ -1,6 +1,6 @@
 # Packaging and release
 
-M1 delivery is the `dev` branch and a runnable development/build application. Public publishing is M3.
+M1/M2 delivery is the `dev` branch and a runnable development/build application. Public publishing is M3.
 
 ## Linux
 

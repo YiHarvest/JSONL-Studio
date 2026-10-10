@@ -1,8 +1,10 @@
 pub mod core;
+pub mod document;
 
 #[cfg(feature = "desktop")]
 mod desktop {
-    use super::core::{Info, Page, Session};
+    use super::core::{Page, Session};
+    use super::document::{Document, DocumentInfo, Edit, SearchPage};
     use std::{
         path::PathBuf,
         sync::{Arc, Mutex},
@@ -11,10 +13,11 @@ mod desktop {
 
     #[derive(Default)]
     struct AppState {
-        session: Mutex<Option<Arc<Session>>>,
+        session: Mutex<Option<Arc<Mutex<Document>>>>,
         pending: Mutex<Vec<String>>,
+        recovery: Mutex<PathBuf>,
     }
-    fn current(state: &AppState) -> Result<Arc<Session>, String> {
+    fn current(state: &AppState) -> Result<Arc<Mutex<Document>>, String> {
         state
             .session
             .lock()
@@ -23,22 +26,26 @@ mod desktop {
             .ok_or("No file open".into())
     }
     #[tauri::command]
-    async fn open_file(path: String, state: State<'_, AppState>) -> Result<Info, String> {
+    async fn open_file(path: String, state: State<'_, AppState>) -> Result<DocumentInfo, String> {
         let session =
             tauri::async_runtime::spawn_blocking(move || Session::open(PathBuf::from(path)))
                 .await
                 .map_err(|e| e.to_string())??;
-        let info = session.info.clone();
-        *state.session.lock().map_err(|e| e.to_string())? = Some(Arc::new(session));
+        let document = Document::new(session);
+        Document::discard_recovery(&state.recovery.lock().unwrap())?;
+        let info = document.info();
+        *state.session.lock().map_err(|e| e.to_string())? = Some(Arc::new(Mutex::new(document)));
         Ok(info)
     }
     #[tauri::command]
-    async fn import_text(text: String, state: State<'_, AppState>) -> Result<Info, String> {
+    async fn import_text(text: String, state: State<'_, AppState>) -> Result<DocumentInfo, String> {
         let session = tauri::async_runtime::spawn_blocking(move || Session::import(text))
             .await
             .map_err(|e| e.to_string())??;
-        let info = session.info.clone();
-        *state.session.lock().map_err(|e| e.to_string())? = Some(Arc::new(session));
+        let document = Document::new(session);
+        document.checkpoint(&state.recovery.lock().unwrap())?;
+        let info = document.info();
+        *state.session.lock().map_err(|e| e.to_string())? = Some(Arc::new(Mutex::new(document)));
         Ok(info)
     }
     #[tauri::command]
@@ -48,20 +55,99 @@ mod desktop {
         state: State<'_, AppState>,
     ) -> Result<Page, String> {
         let session = current(&state)?;
-        tauri::async_runtime::spawn_blocking(move || session.page(start, count))
-            .await
-            .map_err(|e| e.to_string())?
+        tauri::async_runtime::spawn_blocking(move || {
+            session
+                .lock()
+                .map_err(|e| e.to_string())?
+                .page(start, count)
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
     #[tauri::command]
     fn file_changed(state: State<'_, AppState>) -> Result<bool, String> {
-        Ok(current(&state)?.changed())
+        Ok(current(&state)?
+            .lock()
+            .map_err(|e| e.to_string())?
+            .changed())
     }
     #[tauri::command]
     async fn validate_file(state: State<'_, AppState>) -> Result<(usize, usize), String> {
         let session = current(&state)?;
-        tauri::async_runtime::spawn_blocking(move || session.validate())
+        let document = session.lock().map_err(|e| e.to_string())?.clone();
+        tauri::async_runtime::spawn_blocking(move || document.validate())
             .await
             .map_err(|e| e.to_string())?
+    }
+    #[tauri::command]
+    async fn edit_record(
+        edit: Edit,
+        revision: u64,
+        state: State<'_, AppState>,
+    ) -> Result<DocumentInfo, String> {
+        let session = current(&state)?;
+        let recovery = state.recovery.lock().unwrap().clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut document = session.lock().map_err(|e| e.to_string())?;
+            let mut next = document.clone();
+            let info = next.edit(edit, revision)?;
+            next.checkpoint(&recovery)?;
+            *document = next;
+            Ok(info)
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    }
+    #[tauri::command]
+    async fn save_document(
+        path: String,
+        overwrite: bool,
+        revision: u64,
+        state: State<'_, AppState>,
+    ) -> Result<DocumentInfo, String> {
+        let session = current(&state)?;
+        let recovery = state.recovery.lock().unwrap().clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut document = session.lock().map_err(|e| e.to_string())?;
+            let info = document.save(PathBuf::from(path), overwrite, revision)?;
+            // Saving succeeded even if removing an obsolete checkpoint fails.
+            let _ = Document::discard_recovery(&recovery);
+            Ok(info)
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    }
+    #[tauri::command]
+    async fn search_document(
+        query: String,
+        mode: String,
+        start: usize,
+        state: State<'_, AppState>,
+    ) -> Result<SearchPage, String> {
+        let session = current(&state)?;
+        // Snapshot edit pieces, then release the document lock for cancellable page scans.
+        let document = session.lock().map_err(|e| e.to_string())?.clone();
+        tauri::async_runtime::spawn_blocking(move || document.search(&query, &mode, start))
+            .await
+            .map_err(|e| e.to_string())?
+    }
+    #[tauri::command]
+    fn recovery_available(state: State<'_, AppState>) -> bool {
+        state.recovery.lock().unwrap().exists()
+    }
+    #[tauri::command]
+    async fn restore_document(state: State<'_, AppState>) -> Result<DocumentInfo, String> {
+        let recovery = state.recovery.lock().unwrap().clone();
+        let document = tauri::async_runtime::spawn_blocking(move || Document::restore(&recovery))
+            .await
+            .map_err(|e| e.to_string())??;
+        let info = document.info();
+        *state.session.lock().map_err(|e| e.to_string())? = Some(Arc::new(Mutex::new(document)));
+        Ok(info)
+    }
+    #[tauri::command]
+    fn discard_recovery(state: State<'_, AppState>) -> Result<(), String> {
+        Document::discard_recovery(&state.recovery.lock().unwrap())
     }
     #[tauri::command]
     fn pending_files(state: State<'_, AppState>) -> Vec<String> {
@@ -106,6 +192,8 @@ mod desktop {
             }))
             .plugin(tauri_plugin_dialog::init())
             .setup(|app| {
+                *app.state::<AppState>().recovery.lock().unwrap() =
+                    app.path().app_local_data_dir()?.join("recovery.json");
                 let paths = std::env::args()
                     .skip(1)
                     .filter(|p| !p.starts_with('-'))
@@ -119,7 +207,13 @@ mod desktop {
                 read_page,
                 file_changed,
                 validate_file,
-                pending_files
+                pending_files,
+                edit_record,
+                save_document,
+                search_document,
+                recovery_available,
+                restore_document,
+                discard_recovery
             ])
             .build(tauri::generate_context!())
             .expect("Failed to build JSONL Studio");

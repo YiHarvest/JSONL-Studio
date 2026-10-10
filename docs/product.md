@@ -4,13 +4,13 @@ JSONL Studio is a local desktop JSONL/NDJSON reader and future lightweight edito
 
 ## Milestones
 
-| Milestone | Scope                                                                                                           | Gate                               |
-| --------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| M0        | Tauri shell, indexed Rust reads, nested tree                                                                    | Build and core tests               |
-| M1        | File activation, range navigation, five views, tree interactions, paste/new/array conversion, languages, themes | User reviews runnable reader       |
-| M2        | Record add/edit/copy/delete, whole-file raw/key/value search, hit expansion, safe save/Save As, recovery        | Begins only after user approves M1 |
-| M3        | Signed/notarized macOS, AppImage/PKGBUILD, release and update mechanism                                         | Platform qualification             |
-| P2        | JSONPath/JMESPath, field stats, schema inference, diff, table                                                   | Subsequent scope                   |
+| Milestone | Scope                                                                                                           | Gate                         |
+| --------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| M0        | Tauri shell, indexed Rust reads, nested tree                                                                    | Build and core tests         |
+| M1        | File activation, range navigation, five views, tree interactions, paste/new/array conversion, languages, themes | User reviews runnable reader |
+| M2        | Record add/edit/copy/delete, whole-file raw/key/value search, hit expansion, safe save/Save As, recovery        | Authorized after M1 review   |
+| M3        | Signed/notarized macOS, AppImage/PKGBUILD, release and update mechanism                                         | Platform qualification       |
+| P2        | JSONPath/JMESPath, field stats, schema inference, diff, table                                                   | Subsequent scope             |
 
 ## Reading contract
 
@@ -26,13 +26,13 @@ JSONL Studio is a local desktop JSONL/NDJSON reader and future lightweight edito
 - All/custom count is a browsing scope, not an instruction to transfer the entire file into JavaScript. Next continues at the actual returned line.
 - Paste is capped at 8 MiB; larger inputs use disk opening.
 - Valid/error counts initially describe the returned range. Explicit validation scans the file. Oversized previews count as errors under the reader limit.
-- External changes trigger reload. Reads reject stale indexes. No save command exists in M1.
+- External changes trigger reload. Reads reject stale indexes. M2 save refuses a changed source.
 - Opening a new input prompts before replacing a non-empty unsaved scratch session.
 - Only the latest requested file is opened when several OS activation paths arrive together; M1 has one active document.
 
 ## Desktop experience
 
-Unified macOS titlebar with native traffic lights, native open dialog, keyboard shortcuts, compact toolbar and independent record cards. Linux uses the system's titlebar. Shortcuts: Cmd/Ctrl+O, N, F and G. Cmd/Ctrl+S arrives with M2.
+Unified macOS titlebar with native traffic lights, native open/save dialogs, keyboard shortcuts, compact toolbar and independent record cards. Linux uses the system's titlebar. Shortcuts: Cmd/Ctrl+O, N, F, G and S; Shift+Cmd/Ctrl+S for Save As.
 
 Finder double-click and Open With use bundle file associations and macOS `RunEvent::Opened`; a second Linux process forwards paths to the existing instance. Recent-open UI remains a follow-up item for M3 platform polish.
 

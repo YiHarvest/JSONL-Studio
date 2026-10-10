@@ -5,6 +5,65 @@ test.beforeEach(async ({ page }) => {
   await page.getByLabel("Language").selectOption("en");
 });
 
+test("edit, reject invalid JSON, add duplicate delete and search outside visible range", async ({
+  page,
+}) => {
+  await page.getByText("Explore a sample").click();
+  await page
+    .getByRole("button", { name: "Edit record L1", exact: true })
+    .click();
+  const editor = page.getByRole("textbox", {
+    name: "Record JSON",
+    exact: true,
+  });
+  await editor.fill("{bad}");
+  await page
+    .getByRole("button", { name: "Apply changes", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog").getByRole("alert")).toBeVisible();
+  await editor.fill('{"changed":9007199254740993}');
+  await page
+    .getByRole("button", { name: "Apply changes", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator('[data-line="1"]')).toContainText(
+    "9007199254740993",
+  );
+  await page
+    .getByRole("button", { name: "Duplicate record L1", exact: true })
+    .click();
+  await expect(page.locator(".file-facts")).toContainText("6 lines");
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page
+    .getByRole("button", { name: "Delete record L2", exact: true })
+    .click();
+  await expect(page.locator(".file-facts")).toContainText("5 lines");
+  await page.getByRole("button", { name: "Add record", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Record JSON", exact: true })
+    .fill('{"deep":{"arr":[{"target":"needle"}]}}');
+  await page
+    .getByRole("button", { name: "Apply changes", exact: true })
+    .click();
+  await page.getByLabel("From line").fill("1");
+  await page.getByRole("button", { name: "Go", exact: true }).click();
+  await page.getByLabel("Find in visible records").fill("needle");
+  await page.getByLabel("Search mode").selectOption("value");
+  await page
+    .getByRole("button", { name: "Search entire file", exact: true })
+    .click();
+  await expect(page.locator(".search-results")).toContainText(
+    "/deep/arr/0/target",
+  );
+  await page
+    .locator(".search-results")
+    .getByRole("button")
+    .filter({ hasText: "needle" })
+    .click();
+  await expect(page.locator('[data-line="6"]')).toContainText('"needle"');
+});
+
 test("sample, error isolation, views and range navigation", async ({
   page,
 }) => {

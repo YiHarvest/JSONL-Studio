@@ -4,7 +4,7 @@ A local desktop reader for JSONL and NDJSON. Built with **Tauri 2, Rust, React a
 
 本地 JSONL / NDJSON 阅读器，一行一条记录，数据不上传服务器。
 
-## Current milestone: M0 + M1
+## Current milestone: M0 + M1 + M2
 
 - Native file chooser, drag and drop, command line paths and macOS file activation.
 - Indexed disk reads with bounded IPC pages, independent error handling per physical line.
@@ -15,7 +15,7 @@ A local desktop reader for JSONL and NDJSON. Built with **Tauri 2, Rust, React a
 - Visible-range find, explicit full-file validation, external file change detection.
 - Large integer spellings preserved in Tree and Pretty.
 
-**M2 starts after M1 user approval.** Scratch documents are session-only; editing, disk save, Save As, recovery and whole-file search are M2. Performance figures are targets until measured end to end; see [validation](docs/validation.md).
+M1 was approved and M2 adds CodeMirror record editing, insert/duplicate/delete, raw/key/value whole-file search, atomic Save/Save As and local recovery checkpoints. Cmd/Ctrl+S saves; Shift+Cmd/Ctrl+S opens Save As. Performance figures are targets until measured end to end; see [validation](docs/validation.md) and [M2 contracts](docs/m2.md).
 
 ## Develop
 

@@ -1,8 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save, confirm } from "@tauri-apps/plugin-dialog";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import {
@@ -23,9 +32,32 @@ import {
   PanelTop,
   AlertCircle,
   LoaderCircle,
+  Save,
+  Plus,
 } from "lucide-react";
-import { desktop, importText, readPage, validateFile } from "./bridge";
-import { sizeLabel, type Info, type Page, type ViewMode } from "./model";
+import {
+  desktop,
+  importText,
+  readPage,
+  validateFile,
+  editRecord,
+  searchDocument,
+} from "./bridge";
+import {
+  sizeLabel,
+  pretty,
+  parseTree,
+  type Edit,
+  type Info,
+  type Page,
+  type ViewMode,
+  type SearchHit,
+} from "./model";
+const RecordEditor = lazy(() =>
+  import("./components/RecordEditor").then((module) => ({
+    default: module.RecordEditor,
+  })),
+);
 import { RecordCard } from "./components/RecordCard";
 import type { TreeState } from "./components/tree/JsonTree";
 import i18n, { systemLanguage } from "./i18n";
@@ -53,6 +85,17 @@ export default function App() {
   const [paste, setPaste] = useState("");
   const [query, setQuery] = useState("");
   const [match, setMatch] = useState(0);
+  const [editor, setEditor] = useState<{
+    line: number;
+    text: string;
+    insert: boolean;
+  } | null>(null);
+  const [searchMode, setSearchMode] = useState("raw");
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchScanned, setSearchScanned] = useState(0);
+  const [recoverable, setRecoverable] = useState(false);
+  const searchToken = useRef(0);
   const [depth, setDepth] = useState(2);
   const [treeVersion, setTreeVersion] = useState(0);
   const [toast, setToast] = useState("");
@@ -132,6 +175,9 @@ export default function App() {
       setStats(null);
       setChanged(false);
       setQuery("");
+      searchToken.current++;
+      setSearching(false);
+      setHits([]);
       setMatch(0);
       states.current.clear();
       history.current = [];
@@ -142,15 +188,16 @@ export default function App() {
     [load],
   );
   const allowReplace = useCallback(
-    () =>
-      !infoRef.current?.scratch ||
-      infoRef.current.totalLines === 0 ||
-      window.confirm(t("replaced")),
+    async () =>
+      !infoRef.current?.dirty ||
+      (desktop
+        ? confirm(t("replaced"), { title: "JSONL Studio", kind: "warning" })
+        : window.confirm(t("replaced"))),
     [t],
   );
   const openPath = useCallback(
     async (path: string) => {
-      if (busyRef.current || !allowReplace()) return;
+      if (busyRef.current || !(await allowReplace())) return;
       setBusy(true);
       setError("");
       try {
@@ -179,7 +226,7 @@ export default function App() {
   }, [openPath, t]);
   const importData = useCallback(
     async (text: string) => {
-      if (busyRef.current || !allowReplace()) return;
+      if (busyRef.current || !(await allowReplace())) return;
       setBusy(true);
       setError("");
       try {
@@ -193,12 +240,107 @@ export default function App() {
     },
     [install, allowReplace],
   );
+  const applyEdit = async (edit: Edit) => {
+    if (!info || busyRef.current) throw new Error("Document is busy");
+    setBusy(true);
+    try {
+      const next = await editRecord(edit, info.revision);
+      setInfo(next);
+      setStats(null);
+      states.current.clear();
+      searchToken.current++;
+      setHits([]);
+      setQuery("");
+      history.current = [];
+      setTreeVersion((v) => v + 1);
+      await load(Math.max(1, Math.min(start, next.totalLines || 1)), count);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const saveDocument = useCallback(
+    async (saveAs = false) => {
+      const current = infoRef.current;
+      if (!current || busyRef.current) return;
+      if (!desktop) {
+        setToast(t("browserSave"));
+        return;
+      }
+      let path = current.path;
+      if (saveAs || !path)
+        path = await save({
+          defaultPath: current.name,
+          filters: [{ name: "JSON Lines", extensions: ["jsonl", "ndjson"] }],
+        });
+      if (!path) return;
+      setBusy(true);
+      setError("");
+      try {
+        let next: Info;
+        try {
+          next = await invoke("save_document", {
+            path,
+            overwrite: false,
+            revision: current.revision,
+          });
+        } catch (e) {
+          if (!String(e).includes("Destination exists")) throw e;
+          if (
+            !(await confirm(t("overwrite"), {
+              title: "JSONL Studio",
+              kind: "warning",
+            }))
+          )
+            return;
+          next = await invoke("save_document", {
+            path,
+            overwrite: true,
+            revision: current.revision,
+          });
+        }
+        setInfo(next);
+        setChanged(false);
+        setRecoverable(false);
+        setToast(t("saved"));
+        await load(start, countRef.current);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [load, t, start],
+  );
+  useEffect(() => {
+    if (!desktop) return;
+    let disposed = false;
+    void invoke<boolean>("recovery_available").then((value) => {
+      if (!disposed) setRecoverable(value);
+    });
+    const close = getCurrentWindow().onCloseRequested(async (event) => {
+      event.preventDefault();
+      if (
+        !infoRef.current?.dirty ||
+        (await confirm(t("closeUnsaved"), {
+          title: "JSONL Studio",
+          kind: "warning",
+        }))
+      )
+        await getCurrentWindow().destroy();
+    });
+    return () => {
+      disposed = true;
+      void close.then((fn) => fn());
+    };
+  }, [t]);
   useEffect(() => {
     if (!desktop) return;
     let disposed = false;
     const cleanups: (() => void)[] = [];
     const pending = async () => {
       if (disposed || busyRef.current) return;
+      if ((await invoke<boolean>("recovery_available")) && !infoRef.current)
+        return;
       const paths = await invoke<string[]>("pending_files");
       if (paths.length) await openPath(paths[paths.length - 1]);
     };
@@ -253,11 +395,15 @@ export default function App() {
           jumpInput.current?.focus();
           jumpInput.current?.select();
           break;
+        case "s":
+          e.preventDefault();
+          void saveDocument(e.shiftKey);
+          break;
       }
     };
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-  }, [openFile, importData]);
+  }, [openFile, importData, saveDocument]);
 
   const records = useMemo(
     () =>
@@ -266,6 +412,59 @@ export default function App() {
       ),
     [page, query],
   );
+  const jumpHit = async (hit: SearchHit) => {
+    setQuery("");
+    let state = states.current.get(hit.line);
+    if (!state) {
+      state = { open: new Map(), limits: new Map() };
+      states.current.set(hit.line, state);
+    }
+    state.collapsed = false;
+    state.hit = hit.pointer;
+    const tokens = hit.pointer.split("/").slice(1);
+    let parent = "";
+    state.open.set("", true);
+    for (const token of tokens) {
+      state.open.set(parent, true);
+      const index = Number(token);
+      if (Number.isInteger(index) && index >= 0)
+        state.limits.set(
+          parent,
+          Math.max(50, Math.ceil((index + 1) / 50) * 50),
+        );
+      parent += `/${token}`;
+      state.open.set(parent, true);
+    }
+    setMode("tree");
+    setTreeVersion((v) => v + 1);
+    await load(hit.line, count);
+  };
+  const runSearch = async () => {
+    if (!query.trim() || !info) return;
+    const token = ++searchToken.current;
+    const text = query;
+    setSearching(true);
+    setHits([]);
+    setSearchScanned(0);
+    setError("");
+    let line = 1;
+    const found: SearchHit[] = [];
+    try {
+      while (token === searchToken.current && found.length < 500) {
+        const result = await searchDocument(text, searchMode, line);
+        if (token !== searchToken.current) break;
+        found.push(...result.hits);
+        setHits(found.slice(0, 500));
+        setSearchScanned(result.nextLine - 1);
+        if (!result.hasMore) break;
+        line = result.nextLine;
+      }
+    } catch (e) {
+      if (token === searchToken.current) setError(String(e));
+    } finally {
+      if (token === searchToken.current) setSearching(false);
+    }
+  };
   const virtual = useVirtualizer({
     count: records.length,
     getScrollElement: () => scroll.current,
@@ -322,11 +521,11 @@ export default function App() {
             <Braces size={19} strokeWidth={2.1} />
           </span>
           <span>JSONL Studio</span>
-          <span className="version">READER</span>
+          <span className="version">EDITOR</span>
         </div>
         <div className="titlebar-center" data-tauri-drag-region>
           {info?.name ?? t("local")}
-          {info?.scratch && <span className="dirty-dot" title={t("unsaved")} />}
+          {info?.dirty && <span className="dirty-dot" title={t("unsaved")} />}
         </div>
         <div className="preferences">
           <label className="preference">
@@ -389,6 +588,21 @@ export default function App() {
           {t("paste")}
         </button>
         <span className="toolbar-divider" />
+        <button
+          className="toolbar-button"
+          disabled={!info || busy || changed}
+          onClick={() => void saveDocument()}
+        >
+          <Save size={16} />
+          {t("save")}
+        </button>
+        <button
+          className="toolbar-button"
+          disabled={!info || busy || changed}
+          onClick={() => void saveDocument(true)}
+        >
+          {t("saveAs")}
+        </button>
         <div className="search-box">
           <Search size={15} />
           <input
@@ -427,6 +641,28 @@ export default function App() {
             </>
           )}
         </div>
+        <select
+          aria-label={t("searchMode")}
+          value={searchMode}
+          onChange={(e) => setSearchMode(e.target.value)}
+        >
+          <option value="raw">{t("rawSearch")}</option>
+          <option value="key">{t("keySearch")}</option>
+          <option value="value">{t("valueSearch")}</option>
+        </select>
+        <button
+          className="icon-button"
+          aria-label={searching ? t("stop") : t("fileSearch")}
+          disabled={!info || busy || !query}
+          onClick={() => {
+            if (searching) {
+              searchToken.current++;
+              setSearching(false);
+            } else void runSearch();
+          }}
+        >
+          {searching ? <X size={15} /> : <Search size={15} />}
+        </button>
         <span className="privacy-badge">
           <ShieldCheck size={14} />
           {t("local")}
@@ -440,7 +676,7 @@ export default function App() {
               <div>
                 <h1>
                   {info.name}
-                  {info.scratch && (
+                  {info.dirty && (
                     <span className="unsaved-label">{t("unsaved")}</span>
                   )}
                 </h1>
@@ -494,6 +730,20 @@ export default function App() {
             </div>
           </section>
           <div className="reader-controls">
+            <button
+              className="small-button"
+              disabled={busy || changed}
+              onClick={() =>
+                setEditor({
+                  line: info.totalLines + 1,
+                  text: "{}",
+                  insert: true,
+                })
+              }
+            >
+              <Plus size={13} />
+              {t("add")}
+            </button>
             <div className="segmented" aria-label="View mode">
               {(["tree", "pretty", "wrap", "raw", "source"] as ViewMode[]).map(
                 (value) => (
@@ -605,6 +855,35 @@ export default function App() {
               </button>
             </div>
           </div>
+          {(hits.length > 0 || searching) && (
+            <div className="search-results">
+              <header>
+                {searching ? t("searching") : `${hits.length} ${t("matches")}`}{" "}
+                · {searchScanned.toLocaleString()} /{" "}
+                {info.totalLines.toLocaleString()} · max 500
+                <button
+                  className="icon-button"
+                  aria-label={t("close")}
+                  onClick={() => {
+                    searchToken.current++;
+                    setSearching(false);
+                    setHits([]);
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              </header>
+              <div>
+                {hits.map((hit, i) => (
+                  <button key={i} onClick={() => void jumpHit(hit)}>
+                    <strong>L{hit.line}</strong>
+                    <code>{hit.pointer || "$"}</code>
+                    <span>{hit.preview}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {mode === "tree" && (
             <div className="tree-tools">
               <span>
@@ -691,6 +970,44 @@ export default function App() {
                       treeState={stateFor(records[item.index].line)}
                       depth={depth}
                       copy={(text) => void copy(text)}
+                      disabled={busy || changed}
+                      search={(text) => {
+                        setQuery(text);
+                        searchInput.current?.focus();
+                      }}
+                      edit={() => {
+                        const record = records[item.index];
+                        let text = record.raw;
+                        try {
+                          text = pretty(parseTree(text));
+                        } catch {
+                          /* repair malformed record */
+                        }
+                        setEditor({ line: record.line, text, insert: false });
+                      }}
+                      duplicate={() =>
+                        void applyEdit({
+                          kind: "duplicate",
+                          line: records[item.index].line,
+                        }).catch((e) => setError(String(e)))
+                      }
+                      remove={() => {
+                        const line = records[item.index].line;
+                        void (
+                          desktop
+                            ? confirm(t("deleteConfirm"), {
+                                title: "JSONL Studio",
+                                kind: "warning",
+                              })
+                            : Promise.resolve(
+                                window.confirm(t("deleteConfirm")),
+                              )
+                        )
+                          .then((ok) => {
+                            if (ok) return applyEdit({ kind: "delete", line });
+                          })
+                          .catch((e) => setError(String(e)));
+                      }}
                     />
                   </div>
                 ))}
@@ -769,6 +1086,46 @@ export default function App() {
             <span>JSONL Studio 0.1.0</span>
           </footer>
         </>
+      )}
+      {recoverable && (
+        <div className="notice recovery-notice">
+          {t("recovery")}
+          <button
+            onClick={() =>
+              void invoke<Info>("restore_document")
+                .then(install)
+                .then(() => setRecoverable(false))
+                .catch((e) => setError(String(e)))
+            }
+          >
+            {t("restore")}
+          </button>
+          <button
+            onClick={() =>
+              void invoke("discard_recovery")
+                .then(() => setRecoverable(false))
+                .catch((e) => setError(String(e)))
+            }
+          >
+            {t("discard")}
+          </button>
+        </div>
+      )}
+      {editor && (
+        <Suspense fallback={<div className="toast">{t("loading")}</div>}>
+          <RecordEditor
+            text={editor.text}
+            title={`${t(editor.insert ? "add" : "edit")} · L${editor.line}`}
+            onClose={() => setEditor(null)}
+            onApply={(text) =>
+              applyEdit({
+                kind: editor.insert ? "insert" : "replace",
+                line: editor.line,
+                text,
+              })
+            }
+          />
+        </Suspense>
       )}
       {pasteOpen && (
         <div

@@ -71,6 +71,107 @@ pub struct Session {
 }
 
 impl Session {
+    pub fn range_len(&self, from: usize, to: usize) -> u64 {
+        self.offsets[to - 1] - self.offsets[from - 1]
+    }
+    pub fn source_len(&self, line: usize) -> u64 {
+        self.offsets[line] - self.offsets[line - 1]
+    }
+    pub fn bytes(&self, line: usize, limit: usize) -> Result<Vec<u8>, String> {
+        if line == 0 || line > self.info.total_lines {
+            return Err("Line out of range".into());
+        }
+        let from = self.offsets[line - 1];
+        let take = (self.source_len(line) as usize).min(limit);
+        let mut result = vec![0; take];
+        match &self.source {
+            Source::Disk { path, .. } => {
+                let mut file = File::open(path).map_err(|e| e.to_string())?;
+                file.seek(SeekFrom::Start(from))
+                    .map_err(|e| e.to_string())?;
+                file.read_exact(&mut result).map_err(|e| e.to_string())?;
+            }
+            Source::Memory(data) => {
+                result.copy_from_slice(&data[from as usize..from as usize + take])
+            }
+        }
+        Ok(result)
+    }
+    pub fn write_range(
+        &self,
+        from: usize,
+        to: usize,
+        writer: &mut impl std::io::Write,
+    ) -> Result<(), String> {
+        self.write_range_skip(from, to, 0, writer)
+    }
+    pub fn write_range_skip(
+        &self,
+        from: usize,
+        to: usize,
+        skip: u64,
+        writer: &mut impl std::io::Write,
+    ) -> Result<(), String> {
+        let start = self.offsets[from - 1] + skip;
+        let end = self.offsets[to - 1];
+        match &self.source {
+            Source::Disk { path, .. } => {
+                let mut file = File::open(path).map_err(|e| e.to_string())?;
+                file.seek(SeekFrom::Start(start))
+                    .map_err(|e| e.to_string())?;
+                let copied = std::io::copy(&mut file.take(end - start), writer)
+                    .map_err(|e| e.to_string())?;
+                if copied != end - start {
+                    return Err("Source truncated during save".into());
+                }
+            }
+            Source::Memory(data) => writer
+                .write_all(&data[start as usize..end as usize])
+                .map_err(|e| e.to_string())?,
+        }
+        Ok(())
+    }
+    pub fn ends_with_newline(&self, line: usize) -> Result<bool, String> {
+        let end = self.offsets[line];
+        match &self.source {
+            Source::Disk { path, .. } => {
+                let mut file = File::open(path).map_err(|e| e.to_string())?;
+                file.seek(SeekFrom::Start(end - 1))
+                    .map_err(|e| e.to_string())?;
+                let mut b = [0];
+                file.read_exact(&mut b).map_err(|e| e.to_string())?;
+                Ok(b[0] == b'\n')
+            }
+            Source::Memory(data) => Ok(data[end as usize - 1] == b'\n'),
+        }
+    }
+    pub fn memory_snapshot(&self) -> Option<Vec<u8>> {
+        match &self.source {
+            Source::Memory(data) => Some(data.clone()),
+            _ => None,
+        }
+    }
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, String> {
+        if bytes.len() > MAX_IMPORT {
+            return Err("Recovery input exceeds 8 MiB".into());
+        }
+        let (offsets, newline, bom) = index(std::io::Cursor::new(&bytes))?;
+        let info = Info {
+            name: "Untitled.jsonl".into(),
+            path: None,
+            size: bytes.len() as u64,
+            total_lines: offsets.len() - 1,
+            modified: None,
+            newline,
+            encoding: if bom { "UTF-8 BOM" } else { "UTF-8" }.into(),
+            scratch: true,
+        };
+        Ok(Self {
+            source: Source::Memory(bytes),
+            offsets,
+            info,
+        })
+    }
     pub fn open(path: PathBuf) -> Result<Self, String> {
         let path = path.canonicalize().map_err(|e| e.to_string())?;
         let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
@@ -264,7 +365,7 @@ fn index(mut reader: impl BufRead) -> Result<(Vec<u64>, String, bool), String> {
     Ok((offsets, newline.into(), prefix == [0xef, 0xbb, 0xbf]))
 }
 
-fn parse(line: usize, bytes: &[u8], truncated: bool) -> Record {
+pub(crate) fn parse(line: usize, bytes: &[u8], truncated: bool) -> Record {
     let source = String::from_utf8_lossy(bytes).into_owned();
     let bytes = if line == 1 {
         bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes)
