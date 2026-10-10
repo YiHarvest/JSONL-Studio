@@ -1,6 +1,9 @@
 # Engineering conventions
 
 - Current authorized scope: M0 + M1 + M2. User approved continuation after reviewing M1.
+- M3 preview-release preparation is authorized: validate packages, prepare release automation and bilingual download documentation.
+- Submit changes by functional module through feature branches and PRs targeting `dev`. The user merges manually; do not merge PRs or push new implementation directly to `dev`.
+- Enable GitHub automatic deletion of PR head branches after merge. Preserve the long-lived `dev` branch.
 - Rust is the only source of truth for desktop document contents.
 - Keep IPC and rendering bounded. All-mode must not load a complete file into JavaScript.
 - Preserve numeric source tokens and physical line identity.
