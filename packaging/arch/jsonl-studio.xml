@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-ndjson">
+    <comment>JSON Lines document</comment>
+    <glob pattern="*.jsonl"/>
+    <glob pattern="*.ndjson"/>
+    <sub-class-of type="text/plain"/>
+  </mime-type>
+  <mime-type type="application/jsonl">
+    <comment>JSON Lines document</comment>
+    <alias type="application/x-jsonlines"/>
+    <sub-class-of type="application/x-ndjson"/>
+  </mime-type>
+</mime-info>

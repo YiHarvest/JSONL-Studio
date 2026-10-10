@@ -1,0 +1,8 @@
+src-tauri/
+Cargo.lock
+package-lock.json
+benchmarks/data/
+benchmarks/results/
+dist/
+test-results/
+playwright-report/

@@ -1,0 +1,37 @@
+[package]
+name = "jsonl-studio"
+version = "0.1.0"
+description = "A private, local JSONL reader"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "jsonl_studio"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+default = ["desktop"]
+desktop = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog", "dep:tauri-plugin-single-instance"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [], optional = true }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
+memchr = "2"
+tauri = { version = "2", features = [], optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[[bin]]
+name = "jsonl-studio"
+path = "src/main.rs"
+required-features = ["desktop"]
+
+[[bin]]
+name = "benchmark"
+path = "src/bin/benchmark.rs"

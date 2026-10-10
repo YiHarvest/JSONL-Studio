@@ -1,0 +1,27 @@
+# Maintainer: YiHarvest
+pkgname=jsonl-studio
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Local JSONL and NDJSON desktop reader'
+arch=('x86_64' 'aarch64')
+url='https://github.com/YiHarvest/JSONL-Studio'
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3')
+makedepends=('git' 'rust' 'nodejs' 'npm')
+source=("$pkgname::git+$url.git#tag=v$pkgver")
+sha256sums=('SKIP')
+
+build() {
+  cd "$srcdir/$pkgname"
+  npm ci
+  npm run tauri build -- --no-bundle
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+  install -Dm755 src-tauri/target/release/jsonl-studio "$pkgdir/usr/bin/jsonl-studio"
+  install -Dm644 packaging/arch/jsonl-studio.desktop "$pkgdir/usr/share/applications/jsonl-studio.desktop"
+  install -Dm644 packaging/arch/jsonl-studio.xml "$pkgdir/usr/share/mime/packages/jsonl-studio.xml"
+  install -Dm644 src-tauri/icons/icon.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/jsonl-studio.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

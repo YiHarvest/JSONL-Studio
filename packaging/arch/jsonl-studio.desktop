@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=JSONL Studio
+Comment=Read local JSONL and NDJSON files
+Exec=jsonl-studio %F
+Icon=jsonl-studio
+Terminal=false
+Categories=Development;Utility;
+MimeType=application/x-ndjson;application/jsonl;
+StartupNotify=true
