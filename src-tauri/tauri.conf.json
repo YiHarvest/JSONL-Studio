@@ -1,7 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "JSONL Studio",
-  "version": "0.1.0",
+  "mainBinaryName": "jsonl-studio",
+  "version": "0.1.0-beta.1",
   "identifier": "io.github.yiharvest.jsonlstudio",
   "build": {
     "beforeDevCommand": "npm run dev",

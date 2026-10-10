@@ -9,3 +9,5 @@ benchmarks/results/
 *.tsbuildinfo
 .DS_Store
 .env*
+release-artifacts/
+squashfs-root/

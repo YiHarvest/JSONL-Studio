@@ -1,25 +1,56 @@
-# Packaging and release
+# Preview package delivery
 
-M1/M2 delivery is the `dev` branch and a runnable development/build application. Public publishing is M3.
+The preview version is `0.1.0-beta.1`. Feature changes arrive through module PRs targeting `dev`; the maintainer merges manually. GitHub automatically deletes merged feature branches.
+
+## Before merge
+
+The installer workflow runs on release-related PRs. It builds Linux AppImage and an unsigned macOS Apple Silicon DMG for validation. PR runs upload Actions artifacts only; they never create a public Release and do not expose signing secrets.
+
+Review frontend/Rust CI and installer jobs. Download the artifacts and test native dialogs, editing/saving, external conflicts, recovery, file activation, filenames with spaces and non-ASCII, and repeated launch. A smoke test proves that the packaged process stays running, not that every native interaction is qualified.
+
+## After the maintainer merges
+
+Confirm all three module PRs have been merged and `dev` checks pass. Only tag the merged commit:
+
+```fish
+git switch dev
+git pull --ff-only origin dev
+node scripts/release.mjs version v0.1.0-beta.1
+git tag -a v0.1.0-beta.1 -m "JSONL Studio preview"
+git push origin v0.1.0-beta.1
+```
+
+The tag workflow builds installers, validates the tag against package/Tauri/Cargo/lock versions, checks SHA-256 and creates a GitHub prerelease with the installers and combined `SHA256SUMS`. No unmerged branch is tagged by the agent.
+
+`workflow_dispatch` builds review artifacts without publication. This supports testing the merged release code before creating a tag.
 
 ## Linux
 
-Build AppImage using `npm run tauri build -- --bundles appimage`. Tauri generates the bundle desktop entry and file association. The Arch source package template installs a native executable, desktop entry, icon and MIME XML.
+```fish
+npm ci
+npm run tauri build -- --bundles appimage
+node scripts/release.mjs collect src-tauri/target/release/bundle linux-x86_64
+node scripts/release.mjs verify release-artifacts
+```
 
-`PKGBUILD` references `v0.1.0`; that tag must exist before packaging from a release. Do not publish to AUR before testing `makepkg` against the release and validating desktop activation on GNOME and KDE/Plasma.
+Tauri explicitly uses `mainBinaryName: jsonl-studio`; the separate benchmark executable must never be packaged as the app.
 
-Test cold launch with a path, second launch forwarding, filenames with spaces/non-ASCII, drag/drop, file chooser, read-only files and external deletion/truncation.
+Stable asset name: `JSONL-Studio_0.1.0-beta.1_linux-x86_64.AppImage`. Download, allow execution and launch. FUSE 2 may be required; extraction mode works without it. Arch `PKGBUILD` references the prerelease tag and is a source-package template, not a submitted AUR package. AppImage does not automatically install MIME or application-menu integration.
 
-## macOS
+CI builds on Ubuntu 24.04 and launches the extracted AppImage executable under Xvfb without a development server. Test separately on Arch/GNOME/KDE before broad stable distribution.
 
-Initial build target: `aarch64-apple-darwin`, DMG. Bundled file associations route `.jsonl`/`.ndjson` to the app. Test Finder double-click/Open With while closed and already running, drag/drop, titlebar traffic lights, system theme, shortcuts and recent files.
+## macOS signing gate
 
-GitHub Actions accepts Apple signing secrets. Missing credentials produce an unsigned development artifact; this is not a qualified public macOS release. Before public release, verify Developer ID, hardened runtime, notarization and Staple using `codesign`, `spctl`, `xcrun stapler validate` on the downloaded artifact.
+Public macOS publication requires all six repository secrets:
 
-## Automation
+`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`.
 
-PR/push CI checks frontend and Rust on Linux/macOS. Tags matching `v*` build platform artifacts through `tauri-action`, generate SHA256SUMS and upload workflow artifacts.
+Without them the tag workflow publishes Linux only. PR builds can produce unsigned DMG review artifacts. With credentials, Tauri signs and notarizes, then checks `codesign`, `spctl`, and Staple. The signed DMG is included only if these checks pass.
 
-GitHub Release publication and automatic updates are intentionally separate M3 steps. Do not tag or publish during M1 review. A future release job must verify package version matches tag, combine checksums and explicitly publish the verified artifacts.
+Initial target is Apple Silicon `aarch64-apple-darwin`. Intel/Universal is not included. Apple Developer enrollment, signing credentials and macOS device qualification require the maintainer's account/device; the agent cannot manufacture them.
 
-The icon is a temporary locally generated braces mark; final name and icon remain product decisions.
+## Checksums and notes
+
+`scripts/release.mjs` rejects mismatched versions, wrong tags, missing/duplicate installers and checksum mismatches. It creates stable attachment names and combines platform checksums. Release notes are bilingual in `docs/releases/preview.md`.
+
+Public release publication uses GitHub Releases, not Actions artifact links. Automatic application updates remain a later feature; this preview does not install an updater.

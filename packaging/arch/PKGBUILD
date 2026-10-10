@@ -1,6 +1,7 @@
 # Maintainer: YiHarvest
 pkgname=jsonl-studio
-pkgver=0.1.0
+pkgver=0.1.0beta1
+_tag=v0.1.0-beta.1
 pkgrel=1
 pkgdesc='Local JSONL and NDJSON desktop reader'
 arch=('x86_64' 'aarch64')
@@ -8,7 +9,7 @@ url='https://github.com/YiHarvest/JSONL-Studio'
 license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3')
 makedepends=('git' 'rust' 'nodejs' 'npm')
-source=("$pkgname::git+$url.git#tag=v$pkgver")
+source=("$pkgname::git+$url.git#tag=$_tag")
 sha256sums=('SKIP')
 
 build() {
