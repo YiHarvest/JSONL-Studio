@@ -420,7 +420,7 @@ impl Document {
         temp.flush().map_err(|e| e.to_string())?;
         temp.as_file().sync_all().map_err(|e| e.to_string())?;
         // Build the new index before the commit point.
-        let _checked = Session::open(temp.path().to_path_buf())?;
+        let checked = Session::open(temp.path().to_path_buf())?;
         if self.changed() {
             return Err("Source changed during save; original retained".into());
         }
@@ -438,7 +438,8 @@ impl Document {
             temp.persist_noclobber(&target).map_err(|e| e.to_string())?;
         }
         let revision = self.revision + 1;
-        let source = Session::open(target)
+        let source = checked
+            .retarget(target)
             .map_err(|e| format!("File was saved, but reopening failed: {e}"))?;
         *self = Self::new(source);
         self.revision = revision;

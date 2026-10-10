@@ -71,6 +71,29 @@ pub struct Session {
 }
 
 impl Session {
+    /// Reuse a validated temporary file's index after atomic rename.
+    pub(crate) fn retarget(mut self, path: PathBuf) -> Result<Self, String> {
+        let path = path.canonicalize().map_err(|e| e.to_string())?;
+        let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+        let expected = match &self.source {
+            Source::Disk { stamp, .. } => stamp,
+            Source::Memory(_) => return Err("Only indexed disk files can be retargeted".into()),
+        };
+        if !meta.is_file() || Stamp::from(&meta) != *expected {
+            return Err("Saved file changed after replacement".into());
+        }
+        self.info.name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        self.info.path = Some(path.to_string_lossy().into_owned());
+        self.source = Source::Disk {
+            path,
+            stamp: Stamp::from(&meta),
+        };
+        Ok(self)
+    }
     pub fn range_len(&self, from: usize, to: usize) -> u64 {
         self.offsets[to - 1] - self.offsets[from - 1]
     }
@@ -495,5 +518,19 @@ mod tests {
             p.records[0].json.as_deref(),
             Some("{\"n\":1e-9,\"n\":9007199254740993}")
         );
+    }
+    #[test]
+    fn retarget_reuses_index_and_rejects_changed_destination() {
+        let (file, session) = disk(b"{}\r\nfalse\n");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("saved.jsonl");
+        let index_allocation = session.offsets.as_ptr();
+        file.persist(&path).unwrap();
+        let session = session.retarget(path.clone()).unwrap();
+        assert_eq!(session.offsets.as_ptr(), index_allocation);
+        assert_eq!(session.info.name, "saved.jsonl");
+        assert_eq!(session.page(1, 10).unwrap().records.len(), 2);
+        std::fs::write(&path, b"\"changed\"\n").unwrap();
+        assert!(session.retarget(path).is_err());
     }
 }
