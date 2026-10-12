@@ -28,6 +28,15 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 - Recovery requires the original disk source to remain available and unchanged. Unapplied CodeMirror drafts are not checkpointed.
 - M1 performance measurements below remain unchanged; M2 does not certify the existing latency, FPS or full-app memory targets.
 
+## Reader workspace and search checks
+
+- The reader workspace keeps file metadata in a collapsible left sidebar and full-file search results in a collapsible right sidebar. At a 2,708 × 1,640 viewport with both sidebars open, the center editor measured 2,162 px wide and the document had no horizontal overflow.
+- At a 900 × 700 viewport, sidebars switch to overlays, the center editor retains the full 900 px layout width, and the compact reader toolbar does not overflow.
+- Search starts after a 250 ms input debounce, scans the Rust-backed document in bounded batches, preserves all visible records, and highlights every visible case-insensitive match in Tree, Pretty, Raw, source and result-preview surfaces. Rendering is capped at 1,000 highlights per text surface.
+- Content font scaling supports 80–180%, persists locally, updates virtual tree row measurements, and exposes `Cmd/Ctrl +`, `Cmd/Ctrl -` and `Cmd/Ctrl 0`.
+- Frontend strict TypeScript, ESLint, Prettier, Vitest (5 tests), production build and Playwright Chromium (5 scenarios) passed. Playwright covers automatic full-file search, result navigation, visible yellow highlights and font scaling.
+- Rust fmt, all-target/all-feature clippy with `-D warnings`, and all 17 Rust tests passed. No Rust document-content or IPC contract changed in this UI module.
+
 ## Reproduce benchmarks
 
 ```fish

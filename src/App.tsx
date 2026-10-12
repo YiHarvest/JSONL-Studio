@@ -1,9 +1,9 @@
 import {
   lazy,
   Suspense,
+  type CSSProperties,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -34,6 +34,10 @@ import {
   LoaderCircle,
   Save,
   Plus,
+  PanelLeft,
+  PanelRight,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import {
   desktop,
@@ -59,6 +63,7 @@ const RecordEditor = lazy(() =>
   })),
 );
 import { RecordCard } from "./components/RecordCard";
+import { HighlightText } from "./components/HighlightText";
 import type { TreeState } from "./components/tree/JsonTree";
 import i18n, { systemLanguage } from "./i18n";
 import { sample } from "./sample";
@@ -85,7 +90,7 @@ export default function App() {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState("");
   const [query, setQuery] = useState("");
-  const [match, setMatch] = useState(0);
+  const [activeHit, setActiveHit] = useState(-1);
   const [editor, setEditor] = useState<{
     line: number;
     text: string;
@@ -97,6 +102,7 @@ export default function App() {
   const [searchScanned, setSearchScanned] = useState(0);
   const [recoverable, setRecoverable] = useState(false);
   const searchToken = useRef(0);
+  const searchTimer = useRef<number | undefined>(undefined);
   const [depth, setDepth] = useState(2);
   const [treeVersion, setTreeVersion] = useState(0);
   const [toast, setToast] = useState("");
@@ -104,6 +110,14 @@ export default function App() {
     localStorage.getItem("language") ?? "system",
   );
   const [theme, setTheme] = useState(localStorage.getItem("theme") ?? "system");
+  const [detailsOpen, setDetailsOpen] = useState(
+    localStorage.getItem("detailsOpen") === "true",
+  );
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [fontScale, setFontScale] = useState(() => {
+    const stored = Number(localStorage.getItem("fontScale") ?? 100);
+    return Number.isFinite(stored) ? Math.min(180, Math.max(80, stored)) : 100;
+  });
   const states = useRef(new Map<number, TreeState>());
   const scroll = useRef<HTMLDivElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -150,6 +164,12 @@ export default function App() {
     return () => media.removeEventListener("change", apply);
   }, [theme]);
   useEffect(() => {
+    localStorage.setItem("detailsOpen", String(detailsOpen));
+  }, [detailsOpen]);
+  useEffect(() => {
+    localStorage.setItem("fontScale", String(fontScale));
+  }, [fontScale]);
+  useEffect(() => {
     document.documentElement.lang = i18n.language;
   }, [language]);
 
@@ -179,7 +199,8 @@ export default function App() {
       searchToken.current++;
       setSearching(false);
       setHits([]);
-      setMatch(0);
+      setActiveHit(-1);
+      setSearchOpen(false);
       states.current.clear();
       history.current = [];
       setDepth(2);
@@ -251,6 +272,7 @@ export default function App() {
       states.current.clear();
       searchToken.current++;
       setHits([]);
+      setActiveHit(-1);
       setQuery("");
       history.current = [];
       setTreeVersion((v) => v + 1);
@@ -400,21 +422,32 @@ export default function App() {
           e.preventDefault();
           void saveDocument(e.shiftKey);
           break;
+        case "=":
+        case "+":
+          e.preventDefault();
+          setFontScale((value) => Math.min(180, value + 10));
+          break;
+        case "-":
+          e.preventDefault();
+          setFontScale((value) => Math.max(80, value - 10));
+          break;
+        case "0":
+          e.preventDefault();
+          setFontScale(100);
+          break;
       }
     };
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
   }, [openFile, importData, saveDocument]);
 
-  const records = useMemo(
-    () =>
-      page.records.filter(
-        (r) => !query || r.raw.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [page, query],
-  );
+  const records = page.records;
   const jumpHit = async (hit: SearchHit) => {
-    setQuery("");
+    if (searchMode === "raw") {
+      setMode("wrap");
+      await load(hit.line, count);
+      return;
+    }
     let state = states.current.get(hit.line);
     if (!state) {
       state = { open: new Map(), limits: new Map() };
@@ -440,12 +473,13 @@ export default function App() {
     setTreeVersion((v) => v + 1);
     await load(hit.line, count);
   };
-  const runSearch = async () => {
+  const runSearch = useCallback(async () => {
     if (!query.trim() || !info) return;
     const token = ++searchToken.current;
     const text = query;
     setSearching(true);
     setHits([]);
+    setActiveHit(-1);
     setSearchScanned(0);
     setError("");
     let line = 1;
@@ -465,17 +499,31 @@ export default function App() {
     } finally {
       if (token === searchToken.current) setSearching(false);
     }
-  };
+  }, [info, query, searchMode]);
+  useEffect(() => {
+    searchToken.current++;
+    window.clearTimeout(searchTimer.current);
+    setActiveHit(-1);
+    if (!query.trim() || !info) {
+      setSearching(false);
+      setHits([]);
+      setSearchScanned(0);
+      return;
+    }
+    setSearchOpen(true);
+    searchTimer.current = window.setTimeout(() => void runSearch(), 250);
+    return () => window.clearTimeout(searchTimer.current);
+  }, [info, query, runSearch, searchMode]);
   const virtual = useVirtualizer({
     count: records.length,
     getScrollElement: () => scroll.current,
-    estimateSize: () => (mode === "tree" ? 240 : 160),
+    estimateSize: () => (mode === "tree" ? 240 : 160) * (fontScale / 100),
     overscan: 3,
     getItemKey: (index) => records[index].line,
   });
   useEffect(() => {
     virtual.measure();
-  }, [mode, depth, treeVersion, virtual]);
+  }, [mode, depth, treeVersion, fontScale, virtual]);
   const stateFor = (line: number) => {
     if (!states.current.has(line))
       states.current.set(line, { open: new Map(), limits: new Map() });
@@ -515,7 +563,14 @@ export default function App() {
   const visibleErrors = page.records.filter((r) => r.error).length;
   const isMac = navigator.userAgent.includes("Mac");
   return (
-    <div className={`app ${isMac && desktop ? "mac" : ""}`}>
+    <div
+      className={`app ${isMac && desktop ? "mac" : ""}`}
+      style={
+        {
+          "--reader-font-scale": fontScale / 100,
+        } as CSSProperties
+      }
+    >
       <header className="titlebar" data-tauri-drag-region>
         <div className="brand" data-tauri-drag-region>
           <span className="brand-icon">
@@ -563,6 +618,17 @@ export default function App() {
         </div>
       </header>
       <div className="toolbar">
+        {info && (
+          <button
+            className={`icon-button panel-toggle ${detailsOpen ? "active" : ""}`}
+            aria-label={t("fileDetails")}
+            aria-pressed={detailsOpen}
+            title={t("fileDetails")}
+            onClick={() => setDetailsOpen((value) => !value)}
+          >
+            <PanelLeft size={17} />
+          </button>
+        )}
         <button
           className="toolbar-button primary-open"
           disabled={busy}
@@ -613,20 +679,28 @@ export default function App() {
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
-              setMatch(0);
+              setActiveHit(-1);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                window.clearTimeout(searchTimer.current);
+                void runSearch();
+              }
             }}
           />
           {query && (
             <>
-              <span className="match-count">{records.length}</span>
+              <span className="match-count">
+                {searching ? "…" : hits.length}
+              </span>
               <button
                 className="icon-button"
                 aria-label={t("findNext")}
                 onClick={() => {
-                  if (records.length) {
-                    const next = (match + 1) % records.length;
-                    setMatch(next);
-                    virtual.scrollToIndex(next);
+                  if (hits.length) {
+                    const next = (activeHit + 1) % hits.length;
+                    setActiveHit(next);
+                    void jumpHit(hits[next]);
                   }
                 }}
               >
@@ -659,95 +733,158 @@ export default function App() {
             if (searching) {
               searchToken.current++;
               setSearching(false);
-            } else void runSearch();
+            } else {
+              window.clearTimeout(searchTimer.current);
+              void runSearch();
+            }
           }}
         >
           {searching ? <X size={15} /> : <Search size={15} />}
         </button>
+        <div className="zoom-controls" aria-label={t("fontSize")}>
+          <button
+            className="icon-button"
+            aria-label={t("zoomOut")}
+            disabled={fontScale <= 80}
+            onClick={() => setFontScale((value) => Math.max(80, value - 10))}
+          >
+            <ZoomOut size={16} />
+          </button>
+          <button
+            className="zoom-value"
+            title={`${isMac ? "⌘" : "Ctrl"}+0`}
+            onClick={() => setFontScale(100)}
+          >
+            {fontScale}%
+          </button>
+          <button
+            className="icon-button"
+            aria-label={t("zoomIn")}
+            disabled={fontScale >= 180}
+            onClick={() => setFontScale((value) => Math.min(180, value + 10))}
+          >
+            <ZoomIn size={16} />
+          </button>
+        </div>
+        {info && (
+          <button
+            className={`icon-button panel-toggle ${searchOpen ? "active" : ""}`}
+            aria-label={t("searchResults")}
+            aria-pressed={searchOpen}
+            title={t("searchResults")}
+            onClick={() => setSearchOpen((value) => !value)}
+          >
+            <PanelRight size={17} />
+          </button>
+        )}
         <span className="privacy-badge">
           <ShieldCheck size={14} />
           {t("local")}
         </span>
       </div>
       {info ? (
-        <>
-          <section className="file-info">
-            <div className="file-heading">
-              <FileJson2 size={29} strokeWidth={1.4} />
-              <div>
-                <h1>
-                  {info.name}
-                  {info.dirty && (
-                    <span className="unsaved-label">{t("unsaved")}</span>
-                  )}
-                </h1>
-                <p title={info.path ?? ""}>{info.path ?? t("scratchNotice")}</p>
-              </div>
-            </div>
-            <div className="file-facts">
-              <div>
-                <strong>{sizeLabel(info.size)}</strong>
+        <div
+          className={`workspace ${detailsOpen ? "details-open" : ""} ${searchOpen ? "search-open" : ""}`}
+        >
+          {detailsOpen && (
+            <aside className="file-sidebar" aria-label={t("fileDetails")}>
+              <header className="sidebar-header">
                 <span>
-                  {info.encoding} · {info.newline}
+                  <FileJson2 size={15} />
+                  {t("fileDetails")}
                 </span>
-              </div>
-              <div>
-                <strong>
-                  {info.totalLines.toLocaleString()} <small>{t("lines")}</small>
-                </strong>
-                <span>
-                  {info.modified
-                    ? `${t("modified")} ${new Date(info.modified * 1000).toLocaleString()}`
-                    : "JSONL / NDJSON"}
-                </span>
-              </div>
-              <div className="validation-fact">
-                <strong>
-                  <span className="valid-color">
-                    {stats
-                      ? stats[0].toLocaleString()
-                      : page.records.length - visibleErrors}
-                  </span>
-                  <small> {t("valid")}</small>
-                  <span
-                    className={visibleErrors || stats?.[1] ? "error-color" : ""}
-                  >
-                    {" "}
-                    · {stats ? stats[1].toLocaleString() : visibleErrors}
-                  </span>
-                  <small> {t("errors")}</small>
-                </strong>
                 <button
-                  disabled={validating || busy || changed}
-                  onClick={() => void validate()}
+                  className="icon-button"
+                  aria-label={t("close")}
+                  onClick={() => setDetailsOpen(false)}
                 >
-                  {validating
-                    ? t("validating")
-                    : stats
-                      ? `✓ ${t("validate")}`
-                      : `${t("range")} · ${t("validate")}`}
+                  <X size={14} />
                 </button>
-              </div>
-            </div>
-          </section>
-          <div className="reader-controls">
-            <button
-              className="small-button"
-              disabled={busy || changed}
-              onClick={() =>
-                setEditor({
-                  line: info.totalLines + 1,
-                  text: "{}",
-                  insert: true,
-                })
-              }
-            >
-              <Plus size={13} />
-              {t("add")}
-            </button>
-            <div className="segmented" aria-label="View mode">
-              {(["tree", "pretty", "wrap", "raw", "source"] as ViewMode[]).map(
-                (value) => (
+              </header>
+              <section className="file-info">
+                <div className="file-heading">
+                  <div>
+                    <h1>
+                      {info.name}
+                      {info.dirty && (
+                        <span className="unsaved-label">{t("unsaved")}</span>
+                      )}
+                    </h1>
+                    <p title={info.path ?? ""}>
+                      {info.path ?? t("scratchNotice")}
+                    </p>
+                  </div>
+                </div>
+                <div className="file-facts">
+                  <div>
+                    <span>{t("fileSize")}</span>
+                    <strong>{sizeLabel(info.size)}</strong>
+                    <span>
+                      {info.encoding} · {info.newline}
+                    </span>
+                  </div>
+                  <div>
+                    <span>{t("recordCount")}</span>
+                    <strong>
+                      {info.totalLines.toLocaleString()}{" "}
+                      <small>{t("lines")}</small>
+                    </strong>
+                    <span>
+                      {info.modified
+                        ? `${t("modified")} ${new Date(info.modified * 1000).toLocaleString()}`
+                        : "JSONL / NDJSON"}
+                    </span>
+                  </div>
+                  <div className="validation-fact">
+                    <span>{t("validation")}</span>
+                    <strong>
+                      <span className="valid-color">
+                        {stats
+                          ? stats[0].toLocaleString()
+                          : page.records.length - visibleErrors}
+                      </span>
+                      <small> {t("valid")}</small>
+                      <span
+                        className={
+                          visibleErrors || stats?.[1] ? "error-color" : ""
+                        }
+                      >
+                        {" "}
+                        · {stats ? stats[1].toLocaleString() : visibleErrors}
+                      </span>
+                      <small> {t("errors")}</small>
+                    </strong>
+                    <button
+                      disabled={validating || busy || changed}
+                      onClick={() => void validate()}
+                    >
+                      {validating ? t("validating") : t("validate")}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          )}
+          <section className="editor-shell">
+            <div className="reader-controls">
+              <button
+                className="small-button"
+                disabled={busy || changed}
+                onClick={() =>
+                  setEditor({
+                    line: info.totalLines + 1,
+                    text: "{}",
+                    insert: true,
+                  })
+                }
+              >
+                <Plus size={13} />
+                {t("add")}
+              </button>
+              <div className="segmented" aria-label={t("viewMode")}>
+                {(
+                  ["tree", "pretty", "wrap", "raw", "source"] as ViewMode[]
+                ).map((value) => (
                   <button
                     key={value}
                     aria-pressed={mode === value}
@@ -757,282 +894,318 @@ export default function App() {
                     {value === "tree" && <Braces size={13} />}
                     {t(value)}
                   </button>
-                ),
-              )}
-            </div>
-            <div className="range-controls">
-              <label>
-                {t("show")}{" "}
-                <select
-                  aria-label={t("show")}
-                  value={quantity}
+                ))}
+              </div>
+              <div className="range-controls">
+                <label>
+                  {t("show")}{" "}
+                  <select
+                    aria-label={t("show")}
+                    value={quantity}
+                    disabled={busy}
+                    onChange={(e) => changeCount(e.target.value)}
+                  >
+                    {[10, 50, 100, 500, 1000].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                    <option value="all">{t("all")}</option>
+                    <option value="custom">{t("custom")}</option>
+                  </select>
+                </label>
+                {quantity === "custom" && (
+                  <input
+                    type="number"
+                    aria-label={t("custom")}
+                    min="1"
+                    max="1000"
+                    value={customCount}
+                    onChange={(e) => setCustomCount(Number(e.target.value))}
+                    onBlur={() => void load(start, count)}
+                  />
+                )}
+                <label>
+                  {t("from")}{" "}
+                  <input
+                    ref={jumpInput}
+                    type="number"
+                    min="1"
+                    max={Math.max(1, info.totalLines)}
+                    value={jump}
+                    onChange={(e) => setJump(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !busy) {
+                        history.current = [];
+                        void load(
+                          Math.max(
+                            1,
+                            Math.min(info.totalLines || 1, Number(jump) || 1),
+                          ),
+                          count,
+                        );
+                      }
+                    }}
+                  />
+                </label>
+                <button
+                  className="small-button"
                   disabled={busy}
-                  onChange={(e) => changeCount(e.target.value)}
+                  onClick={() => {
+                    history.current = [];
+                    void load(
+                      Math.max(
+                        1,
+                        Math.min(info.totalLines || 1, Number(jump) || 1),
+                      ),
+                      count,
+                    );
+                  }}
                 >
-                  {[10, 50, 100, 500, 1000].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                  <option value="all">{t("all")}</option>
-                  <option value="custom">{t("custom")}</option>
-                </select>
-              </label>
-              {quantity === "custom" && (
-                <input
-                  type="number"
-                  aria-label={t("custom")}
-                  min="1"
-                  max="1000"
-                  value={customCount}
-                  onChange={(e) => setCustomCount(Number(e.target.value))}
-                  onBlur={() => {
-                    if (info) void load(start, count);
+                  {t("go")}
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label={t("previous")}
+                  disabled={busy || start <= 1}
+                  onClick={() =>
+                    void load(
+                      history.current.pop() ?? Math.max(1, start - count),
+                      count,
+                    )
+                  }
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label={t("next")}
+                  disabled={busy || !page.hasMore}
+                  onClick={() => {
+                    history.current.push(start);
+                    void load(page.nextLine, count);
                   }}
-                />
-              )}
-              <label>
-                {t("from")}{" "}
-                <input
-                  ref={jumpInput}
-                  type="number"
-                  min="1"
-                  max={Math.max(1, info.totalLines)}
-                  value={jump}
-                  onChange={(e) => setJump(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !busy) {
-                      history.current = [];
-                      void load(
-                        Math.max(
-                          1,
-                          Math.min(info.totalLines || 1, Number(jump) || 1),
-                        ),
-                        count,
-                      );
-                    }
-                  }}
-                />
-              </label>
-              <button
-                className="small-button"
-                disabled={busy}
-                onClick={() => {
-                  history.current = [];
-                  void load(
-                    Math.max(
-                      1,
-                      Math.min(info.totalLines || 1, Number(jump) || 1),
-                    ),
-                    count,
-                  );
-                }}
-              >
-                {t("go")}
-              </button>
-              <button
-                className="icon-button"
-                aria-label={t("previous")}
-                disabled={busy || start <= 1}
-                onClick={() =>
-                  void load(
-                    history.current.pop() ?? Math.max(1, start - count),
-                    count,
-                  )
-                }
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                className="icon-button"
-                aria-label={t("next")}
-                disabled={busy || !page.hasMore}
-                onClick={() => {
-                  history.current.push(start);
-                  void load(page.nextLine, count);
-                }}
-              >
-                <ChevronRight size={16} />
-              </button>
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
-          </div>
-          {(hits.length > 0 || searching) && (
-            <div className="search-results">
-              <header>
-                {searching ? t("searching") : `${hits.length} ${t("matches")}`}{" "}
-                · {searchScanned.toLocaleString()} /{" "}
-                {info.totalLines.toLocaleString()} · max 500
+            {mode === "tree" && (
+              <div className="tree-tools">
+                <span>
+                  <PanelTop size={12} />
+                  JSON TREE
+                </span>
+                <button onClick={() => setTreeDepth(129)}>{t("expand")}</button>
+                <button onClick={() => setTreeDepth(0)}>{t("collapse")}</button>
+                <span className="tools-divider" />
+                {[1, 2, 3].map((n) => (
+                  <button
+                    className={depth === n ? "selected-depth" : ""}
+                    key={n}
+                    onClick={() => setTreeDepth(n)}
+                  >
+                    {t("depth")} {n}
+                  </button>
+                ))}
+                <span className="tree-hint">
+                  {isMac ? "Option" : "Alt"} + click ↳
+                </span>
+              </div>
+            )}
+            {changed && (
+              <div className="notice">
+                <AlertCircle size={15} />
+                {t("changed")}
+                <button onClick={() => info.path && void openPath(info.path)}>
+                  {t("reload")}
+                </button>
+              </div>
+            )}
+            {error && (
+              <div className="notice error-notice" role="alert">
+                <AlertCircle size={15} />
+                {error}
+                <button aria-label={t("close")} onClick={() => setError("")}>
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+            <main className="reader" ref={scroll} aria-busy={busy}>
+              {busy ? (
+                <div className="loading">
+                  <LoaderCircle size={22} className="spin" />
+                  {t("loading")}
+                </div>
+              ) : !records.length ? (
+                <div className="empty-records">{t("noRecords")}</div>
+              ) : mode === "source" ? (
+                <div className="source-panel">
+                  <button
+                    className="source-copy"
+                    onClick={() =>
+                      void copy(records.map((r) => r.source).join(""))
+                    }
+                  >
+                    <Copy size={14} />
+                    {t("copySource")}
+                  </button>
+                  <pre>
+                    <HighlightText
+                      text={records.map((r) => r.source).join("")}
+                      query={query}
+                    />
+                  </pre>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    height: virtual.getTotalSize(),
+                    position: "relative",
+                    width: "100%",
+                  }}
+                >
+                  {virtual.getVirtualItems().map((item) => (
+                    <div
+                      key={`${item.key}:${treeVersion}`}
+                      data-index={item.index}
+                      ref={virtual.measureElement}
+                      className="virtual-record"
+                      style={{ transform: `translateY(${item.start}px)` }}
+                    >
+                      <RecordCard
+                        record={records[item.index]}
+                        mode={mode}
+                        treeState={stateFor(records[item.index].line)}
+                        depth={depth}
+                        copy={(text) => void copy(text)}
+                        disabled={busy || changed}
+                        query={query}
+                        fontScale={fontScale / 100}
+                        search={(text) => {
+                          setQuery(text);
+                          setSearchOpen(true);
+                          searchInput.current?.focus();
+                        }}
+                        edit={() => {
+                          const record = records[item.index];
+                          let text = record.raw;
+                          try {
+                            text = pretty(parseTree(text));
+                          } catch {
+                            /* repair malformed record */
+                          }
+                          setEditor({
+                            line: record.line,
+                            text,
+                            insert: false,
+                          });
+                        }}
+                        duplicate={() =>
+                          void applyEdit({
+                            kind: "duplicate",
+                            line: records[item.index].line,
+                          }).catch((e) => setError(String(e)))
+                        }
+                        remove={() => {
+                          const line = records[item.index].line;
+                          void (
+                            desktop
+                              ? confirm(t("deleteConfirm"), {
+                                  title: "JSONL Studio",
+                                  kind: "warning",
+                                })
+                              : Promise.resolve(
+                                  window.confirm(t("deleteConfirm")),
+                                )
+                          )
+                            .then((ok) => {
+                              if (ok)
+                                return applyEdit({ kind: "delete", line });
+                            })
+                            .catch((e) => setError(String(e)));
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </main>
+            <footer className="statusbar">
+              <span>
+                <span className="status-dot" />
+                {t("range")}{" "}
+                {page.records.length
+                  ? `${start.toLocaleString()}–${(page.nextLine - 1).toLocaleString()}`
+                  : "0"}{" "}
+                / {info.totalLines.toLocaleString()}
+              </span>
+              <span>
+                {quantity === "all" ||
+                quantity === "custom" ||
+                (page.records.length < count && page.hasMore)
+                  ? t("bounded")
+                  : `${t("readOnly")} · ${info.encoding}`}
+              </span>
+            </footer>
+          </section>
+          {searchOpen && (
+            <aside className="search-results" aria-label={t("searchResults")}>
+              <header className="sidebar-header">
+                <span>
+                  <Search size={15} />
+                  {t("searchResults")}
+                </span>
                 <button
                   className="icon-button"
                   aria-label={t("close")}
-                  onClick={() => {
-                    searchToken.current++;
-                    setSearching(false);
-                    setHits([]);
-                  }}
+                  onClick={() => setSearchOpen(false)}
                 >
-                  <X size={13} />
+                  <X size={14} />
                 </button>
               </header>
-              <div>
-                {hits.map((hit, i) => (
-                  <button key={i} onClick={() => void jumpHit(hit)}>
-                    <strong>L{hit.line}</strong>
-                    <code>{hit.pointer || "$"}</code>
-                    <span>{hit.preview}</span>
-                  </button>
-                ))}
+              <div className="search-summary">
+                {query
+                  ? searching
+                    ? t("searching")
+                    : `${hits.length} ${t("matches")}`
+                  : t("searchHint")}
+                {query && (
+                  <span>
+                    {searchScanned.toLocaleString()} /{" "}
+                    {info.totalLines.toLocaleString()} · max 500
+                  </span>
+                )}
               </div>
-            </div>
-          )}
-          {mode === "tree" && (
-            <div className="tree-tools">
-              <span>
-                <PanelTop size={12} />
-                JSON TREE
-              </span>
-              <button onClick={() => setTreeDepth(129)}>{t("expand")}</button>
-              <button onClick={() => setTreeDepth(0)}>{t("collapse")}</button>
-              <span className="tools-divider" />
-              {[1, 2, 3].map((n) => (
-                <button
-                  className={depth === n ? "selected-depth" : ""}
-                  key={n}
-                  onClick={() => setTreeDepth(n)}
-                >
-                  {t("depth")} {n}
-                </button>
-              ))}
-              <span className="tree-hint">
-                {isMac ? "Option" : "Alt"} + click ↳
-              </span>
-            </div>
-          )}
-          {changed && (
-            <div className="notice">
-              <AlertCircle size={15} />
-              {t("changed")}
-              <button onClick={() => info.path && void openPath(info.path)}>
-                {t("reload")}
-              </button>
-            </div>
-          )}
-          {error && (
-            <div className="notice error-notice" role="alert">
-              <AlertCircle size={15} />
-              {error}
-              <button aria-label={t("close")} onClick={() => setError("")}>
-                <X size={14} />
-              </button>
-            </div>
-          )}
-          <main className="reader" ref={scroll} aria-busy={busy}>
-            {busy ? (
-              <div className="loading">
-                <LoaderCircle size={22} className="spin" />
-                {t("loading")}
-              </div>
-            ) : !records.length ? (
-              <div className="empty-records">
-                {query ? t("noMatches") : t("noRecords")}
-              </div>
-            ) : mode === "source" ? (
-              <div className="source-panel">
-                <button
-                  className="source-copy"
-                  onClick={() =>
-                    void copy(records.map((r) => r.source).join(""))
-                  }
-                >
-                  <Copy size={14} />
-                  {t("copySource")}
-                </button>
-                <pre>{records.map((r) => r.source).join("")}</pre>
-              </div>
-            ) : (
-              <div
-                style={{
-                  height: virtual.getTotalSize(),
-                  position: "relative",
-                  width: "100%",
-                }}
-              >
-                {virtual.getVirtualItems().map((item) => (
-                  <div
-                    key={`${item.key}:${treeVersion}`}
-                    data-index={item.index}
-                    ref={virtual.measureElement}
-                    className="virtual-record"
-                    style={{ transform: `translateY(${item.start}px)` }}
-                  >
-                    <RecordCard
-                      record={records[item.index]}
-                      mode={mode}
-                      treeState={stateFor(records[item.index].line)}
-                      depth={depth}
-                      copy={(text) => void copy(text)}
-                      disabled={busy || changed}
-                      search={(text) => {
-                        setQuery(text);
-                        searchInput.current?.focus();
+              <div className="search-result-list">
+                {!query ? (
+                  <div className="sidebar-empty">{t("searchHint")}</div>
+                ) : !searching && !hits.length ? (
+                  <div className="sidebar-empty">{t("noMatches")}</div>
+                ) : (
+                  hits.map((hit, index) => (
+                    <button
+                      className={activeHit === index ? "active" : ""}
+                      key={`${hit.line}:${hit.pointer}:${index}`}
+                      onClick={() => {
+                        setActiveHit(index);
+                        void jumpHit(hit);
                       }}
-                      edit={() => {
-                        const record = records[item.index];
-                        let text = record.raw;
-                        try {
-                          text = pretty(parseTree(text));
-                        } catch {
-                          /* repair malformed record */
-                        }
-                        setEditor({ line: record.line, text, insert: false });
-                      }}
-                      duplicate={() =>
-                        void applyEdit({
-                          kind: "duplicate",
-                          line: records[item.index].line,
-                        }).catch((e) => setError(String(e)))
-                      }
-                      remove={() => {
-                        const line = records[item.index].line;
-                        void (
-                          desktop
-                            ? confirm(t("deleteConfirm"), {
-                                title: "JSONL Studio",
-                                kind: "warning",
-                              })
-                            : Promise.resolve(
-                                window.confirm(t("deleteConfirm")),
-                              )
-                        )
-                          .then((ok) => {
-                            if (ok) return applyEdit({ kind: "delete", line });
-                          })
-                          .catch((e) => setError(String(e)));
-                      }}
-                    />
-                  </div>
-                ))}
+                    >
+                      <span className="search-result-meta">
+                        <strong>L{hit.line}</strong>
+                        <code>{hit.pointer || "$"}</code>
+                      </span>
+                      <span className="search-preview">
+                        <HighlightText text={hit.preview} query={query} />
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
-            )}
-          </main>
-          <footer className="statusbar">
-            <span>
-              <span className="status-dot" />
-              {t("range")}{" "}
-              {page.records.length
-                ? `${start.toLocaleString()}–${(page.nextLine - 1).toLocaleString()}`
-                : "0"}{" "}
-              / {info.totalLines.toLocaleString()}
-            </span>
-            <span>
-              {quantity === "all" ||
-              quantity === "custom" ||
-              (page.records.length < count && page.hasMore)
-                ? t("bounded")
-                : `${t("readOnly")} · ${info.encoding}`}
-            </span>
-          </footer>
-        </>
+            </aside>
+          )}
+        </div>
       ) : (
         <>
           {error && (

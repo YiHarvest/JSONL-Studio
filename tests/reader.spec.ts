@@ -5,6 +5,13 @@ test.beforeEach(async ({ page }) => {
   await page.getByLabel("Language").selectOption("en");
 });
 
+async function openFileDetails(page: import("@playwright/test").Page) {
+  const panel = page.getByRole("complementary", { name: "File details" });
+  if (!(await panel.isVisible()))
+    await page.getByRole("button", { name: "File details" }).click();
+  return panel;
+}
+
 test("edit, reject invalid JSON, add duplicate delete and search outside visible range", async ({
   page,
 }) => {
@@ -33,12 +40,12 @@ test("edit, reject invalid JSON, add duplicate delete and search outside visible
   await page
     .getByRole("button", { name: "Duplicate record L1", exact: true })
     .click();
-  await expect(page.locator(".file-facts")).toContainText("6 lines");
+  await expect(await openFileDetails(page)).toContainText("6 lines");
   page.once("dialog", (dialog) => void dialog.accept());
   await page
     .getByRole("button", { name: "Delete record L2", exact: true })
     .click();
-  await expect(page.locator(".file-facts")).toContainText("5 lines");
+  await expect(await openFileDetails(page)).toContainText("5 lines");
   await page.getByRole("button", { name: "Add record", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Record JSON", exact: true })
@@ -48,11 +55,8 @@ test("edit, reject invalid JSON, add duplicate delete and search outside visible
     .click();
   await page.getByLabel("From line").fill("1");
   await page.getByRole("button", { name: "Go", exact: true }).click();
-  await page.getByLabel("Find in visible records").fill("needle");
+  await page.getByLabel("Search current file").fill("needle");
   await page.getByLabel("Search mode").selectOption("value");
-  await page
-    .getByRole("button", { name: "Search entire file", exact: true })
-    .click();
   await expect(page.locator(".search-results")).toContainText(
     "/deep/arr/0/target",
   );
@@ -68,7 +72,7 @@ test("sample, error isolation, views and range navigation", async ({
   page,
 }) => {
   await page.getByText("Explore a sample").click();
-  await expect(page.locator(".file-heading h1")).toContainText(
+  await expect((await openFileDetails(page)).locator("h1")).toContainText(
     "Untitled.jsonl",
   );
   await page
@@ -76,11 +80,13 @@ test("sample, error isolation, views and range navigation", async ({
     .click();
   await expect(page.locator(".validation-fact strong")).toContainText("1");
   await page.getByRole("button", { name: "Raw line", exact: true }).click();
-  await page.getByLabel("Find in visible records").fill("trace_04");
+  await page.getByLabel("Search current file").fill("trace_04");
   await expect(page.locator(".record-error")).toContainText("incomplete");
-  await page.getByLabel("Find in visible records").fill("trace_05");
-  await expect(page.locator(".record-raw")).toContainText("9007199254740993");
-  await page.getByLabel("Find in visible records").fill("");
+  await page.getByLabel("Search current file").fill("trace_05");
+  await expect(page.locator('[data-line="5"] .record-raw')).toContainText(
+    "9007199254740993",
+  );
+  await page.getByLabel("Search current file").fill("");
   await page.getByRole("button", { name: "Pretty", exact: true }).click();
   await page.locator(".reader").evaluate((el) => {
     el.scrollTop = el.scrollHeight;
@@ -109,7 +115,7 @@ test("paste array, lazy tree and locale/theme preferences", async ({
       ]),
     );
   await page.getByRole("button", { name: "Import", exact: true }).click();
-  await expect(page.locator(".file-facts")).toContainText("2 lines");
+  await expect(await openFileDetails(page)).toContainText("2 lines");
   await expect(
     page.getByRole("button", { name: "Load 50 more", exact: false }),
   ).toHaveCount(0);
@@ -156,4 +162,36 @@ test("record fold, recursive node fold and copy menu", async ({
     .getByRole("button", { name: "Collapse 1", exact: true })
     .click();
   await expect(card.locator(".tree-scroll")).toHaveCount(0);
+});
+
+test("search highlights every visible match and content font can zoom", async ({
+  page,
+}) => {
+  await page.getByText("Explore a sample").click();
+  await page.getByLabel("Search current file").fill("trace");
+  await expect(
+    page.getByRole("complementary", { name: "Search results" }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".search-result-list .search-mark").first(),
+  ).toBeVisible();
+  await expect(page.locator(".reader .search-mark").first()).toHaveText(
+    /trace/i,
+  );
+
+  const before = await page
+    .locator(".tree-scroll")
+    .first()
+    .evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).fontSize),
+    );
+  await page.getByRole("button", { name: "Increase font size" }).click();
+  const after = await page
+    .locator(".tree-scroll")
+    .first()
+    .evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).fontSize),
+    );
+  expect(after).toBeGreaterThan(before);
+  await expect(page.locator(".zoom-value")).toHaveText("110%");
 });

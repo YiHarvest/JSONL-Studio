@@ -42,7 +42,10 @@ export function RecordEditor({
           EditorView.contentAttributes.of({ "aria-label": t("recordJson") }),
           EditorView.lineWrapping,
           EditorView.theme({
-            "&": { height: "350px", fontSize: "12px" },
+            "&": {
+              height: "350px",
+              fontSize: "calc(12px * var(--reader-font-scale, 1))",
+            },
             ".cm-scroller": { overflow: "auto", fontFamily: "var(--code)" },
             ".cm-gutters": {
               background: "var(--chrome)",
