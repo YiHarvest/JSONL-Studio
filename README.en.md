@@ -16,7 +16,7 @@ A local desktop reader and lightweight editor for datasets, evaluations, Agent T
 
 </div>
 
-> **Current status:** Reading, record editing, whole-file search, safe saving and local recovery are implemented. The first installer is planned as `v0.1.0-beta.1`; available attachments on Releases are authoritative. macOS installers are published only after signing and notarization checks. Large-file performance targets remain under validation.
+> **Current status:** `v0.1.0-beta.2` adds a collapsible workspace, live whole-file search, highlighted results and content font scaling. Release attachments are authoritative; macOS installers are published only after signing and notarization checks. Large-file performance targets remain under validation.
 
 ## Download and install
 
