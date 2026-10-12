@@ -6,9 +6,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function openFileDetails(page: import("@playwright/test").Page) {
-  const panel = page.getByRole("complementary", { name: "File details" });
+  const panel = page.getByRole("complementary", { name: "Navigator" });
   if (!(await panel.isVisible()))
-    await page.getByRole("button", { name: "File details" }).click();
+    await page.getByRole("button", { name: "Navigator" }).click();
   return panel;
 }
 
@@ -27,13 +27,17 @@ test("edit, reject invalid JSON, add duplicate delete and search outside visible
   await page
     .getByRole("button", { name: "Apply changes", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByRole("dialog").getByRole("alert")).toBeVisible();
+  await expect(
+    page.locator('[data-line="1"] .inline-record-editor'),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-line="1"] .inline-record-editor').getByRole("alert"),
+  ).toBeVisible();
   await editor.fill('{"changed":9007199254740993}');
   await page
     .getByRole("button", { name: "Apply changes", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".inline-record-editor")).toHaveCount(0);
   await expect(page.locator('[data-line="1"]')).toContainText(
     "9007199254740993",
   );
@@ -46,6 +50,9 @@ test("edit, reject invalid JSON, add duplicate delete and search outside visible
     .getByRole("button", { name: "Delete record L2", exact: true })
     .click();
   await expect(await openFileDetails(page)).toContainText("5 lines");
+  await page.getByLabel("Show").selectOption("custom");
+  await page.getByLabel("Custom").fill("1");
+  await page.getByLabel("Custom").blur();
   await page.getByRole("button", { name: "Add record", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Record JSON", exact: true })
@@ -53,6 +60,8 @@ test("edit, reject invalid JSON, add duplicate delete and search outside visible
   await page
     .getByRole("button", { name: "Apply changes", exact: true })
     .click();
+  await expect(page.locator('[data-line="6"]')).toContainText("needle");
+  await expect(page.locator(".statusbar")).toContainText("6–6 / 6");
   await page.getByLabel("From line").fill("1");
   await page.getByRole("button", { name: "Go", exact: true }).click();
   await page.getByLabel("Search current file").fill("needle");

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import {
   ChevronRight,
   Copy,
@@ -32,6 +32,7 @@ export function RecordCard({
   search,
   query,
   fontScale,
+  inlineEditor,
 }: {
   record: RecordData;
   mode: ViewMode;
@@ -45,6 +46,7 @@ export function RecordCard({
   search: (text: string) => void;
   query: string;
   fontScale: number;
+  inlineEditor?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(treeState.collapsed ?? false);
@@ -118,41 +120,42 @@ export function RecordCard({
           <Copy size={13} />
         </button>
       </header>
-      {!collapsed &&
-        (record.error ? (
-          <div className="record-error">
-            <div className="error-message">
-              <CircleAlert size={15} />
-              <span>
-                {record.error}
-                {record.column != null
-                  ? ` · ${t("column")} ${record.column}`
-                  : ""}
-              </span>
+      {inlineEditor ??
+        (!collapsed &&
+          (record.error ? (
+            <div className="record-error">
+              <div className="error-message">
+                <CircleAlert size={15} />
+                <span>
+                  {record.error}
+                  {record.column != null
+                    ? ` · ${t("column")} ${record.column}`
+                    : ""}
+                </span>
+              </div>
+              <pre>
+                <HighlightText text={record.raw || "∅"} query={query} />
+              </pre>
             </div>
-            <pre>
-              <HighlightText text={record.raw || "∅"} query={query} />
-            </pre>
-          </div>
-        ) : mode === "tree" && parsed ? (
-          <JsonTree
-            root={parsed}
-            state={treeState}
-            defaultDepth={depth}
-            copy={copy}
-            edit={edit}
-            search={search}
-            query={query}
-            fontScale={fontScale}
-          />
-        ) : (
-          <pre className={`record-raw ${mode === "wrap" ? "wrapped" : ""}`}>
-            <HighlightText
-              text={mode === "pretty" && parsed ? pretty(parsed) : record.raw}
+          ) : mode === "tree" && parsed ? (
+            <JsonTree
+              root={parsed}
+              state={treeState}
+              defaultDepth={depth}
+              copy={copy}
+              edit={edit}
+              search={search}
               query={query}
+              fontScale={fontScale}
             />
-          </pre>
-        ))}
+          ) : (
+            <pre className={`record-raw ${mode === "wrap" ? "wrapped" : ""}`}>
+              <HighlightText
+                text={mode === "pretty" && parsed ? pretty(parsed) : record.raw}
+                query={query}
+              />
+            </pre>
+          )))}
     </article>
   );
 }

@@ -16,11 +16,13 @@ export function RecordEditor({
   title,
   onApply,
   onClose,
+  inline = false,
 }: {
   text: string;
   title: string;
   onApply: (text: string) => Promise<void>;
   onClose: () => void;
+  inline?: boolean;
 }) {
   const { t } = useTranslation();
   const host = useRef<HTMLDivElement>(null);
@@ -43,7 +45,7 @@ export function RecordEditor({
           EditorView.lineWrapping,
           EditorView.theme({
             "&": {
-              height: "350px",
+              height: inline ? "300px" : "350px",
               fontSize: "calc(12px * var(--reader-font-scale, 1))",
             },
             ".cm-scroller": { overflow: "auto", fontFamily: "var(--code)" },
@@ -63,7 +65,7 @@ export function RecordEditor({
       editor.destroy();
       view.current = null;
     };
-  }, [text, t]);
+  }, [inline, text, t]);
   const apply = async () => {
     setBusy(true);
     setError("");
@@ -76,48 +78,47 @@ export function RecordEditor({
       setBusy(false);
     }
   };
-  return (
-    <div className="modal-backdrop">
-      <section
-        className="paste-modal editor-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="editor-title"
-      >
-        <header>
-          <Pencil size={20} />
-          <h2 id="editor-title">{title}</h2>
-          <button
-            className="icon-button"
-            aria-label={t("close")}
-            disabled={busy}
-            onClick={onClose}
-          >
-            <X size={18} />
-          </button>
-        </header>
-        <p>{t("editHint")}</p>
-        <div ref={host} className="code-editor" />
-        {error && (
-          <p className="error-color" role="alert">
-            {error}
-          </p>
-        )}
-        <footer>
-          <span>JSON · 2 MiB max</span>
-          <button className="button" disabled={busy} onClick={onClose}>
-            {t("cancel")}
-          </button>
-          <button
-            className="button primary"
-            disabled={busy}
-            onClick={() => void apply()}
-          >
-            <Check size={14} />
-            {busy ? t("loading") : t("apply")}
-          </button>
-        </footer>
-      </section>
-    </div>
+  const content = (
+    <section
+      className={inline ? "inline-record-editor" : "paste-modal editor-modal"}
+      role={inline ? "region" : "dialog"}
+      aria-modal={inline ? undefined : "true"}
+      aria-labelledby="editor-title"
+    >
+      <header>
+        <Pencil size={20} />
+        <h2 id="editor-title">{title}</h2>
+        <button
+          className="icon-button"
+          aria-label={t("close")}
+          disabled={busy}
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+      </header>
+      <p>{t("editHint")}</p>
+      <div ref={host} className="code-editor" />
+      {error && (
+        <p className="error-color" role="alert">
+          {error}
+        </p>
+      )}
+      <footer>
+        <span>JSON · 2 MiB max</span>
+        <button className="button" disabled={busy} onClick={onClose}>
+          {t("cancel")}
+        </button>
+        <button
+          className="button primary"
+          disabled={busy}
+          onClick={() => void apply()}
+        >
+          <Check size={14} />
+          {busy ? t("loading") : t("apply")}
+        </button>
+      </footer>
+    </section>
   );
+  return inline ? content : <div className="modal-backdrop">{content}</div>;
 }

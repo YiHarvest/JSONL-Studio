@@ -29,7 +29,6 @@ import {
   X,
   Copy,
   FileJson2,
-  PanelTop,
   AlertCircle,
   LoaderCircle,
   Save,
@@ -38,6 +37,12 @@ import {
   PanelRight,
   ZoomIn,
   ZoomOut,
+  SaveAll,
+  AlignLeft,
+  WrapText,
+  Rows3,
+  FileCode2,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   desktop,
@@ -111,7 +116,7 @@ export default function App() {
   );
   const [theme, setTheme] = useState(localStorage.getItem("theme") ?? "system");
   const [detailsOpen, setDetailsOpen] = useState(
-    localStorage.getItem("detailsOpen") === "true",
+    localStorage.getItem("detailsOpen") !== "false",
   );
   const [searchOpen, setSearchOpen] = useState(false);
   const [fontScale, setFontScale] = useState(() => {
@@ -276,7 +281,14 @@ export default function App() {
       setQuery("");
       history.current = [];
       setTreeVersion((v) => v + 1);
-      await load(Math.max(1, Math.min(start, next.totalLines || 1)), count);
+      const target =
+        edit.kind === "duplicate"
+          ? edit.line + 1
+          : edit.kind === "delete"
+            ? Math.min(edit.line, next.totalLines || 1)
+            : edit.line;
+      await load(Math.max(1, Math.min(target, next.totalLines || 1)), count);
+      setToast(t("appliedUnsaved"));
     } finally {
       setBusy(false);
     }
@@ -572,18 +584,166 @@ export default function App() {
       }
     >
       <header className="titlebar" data-tauri-drag-region>
-        <div className="brand" data-tauri-drag-region>
-          <span className="brand-icon">
-            <Braces size={19} strokeWidth={2.1} />
-          </span>
-          <span>JSONL Studio</span>
-          <span className="version">EDITOR</span>
+        <div className="titlebar-leading">
+          <div className="brand" data-tauri-drag-region>
+            <span className="brand-icon">
+              <Braces size={18} strokeWidth={2.1} />
+            </span>
+            <span className="brand-name">JSONL Studio</span>
+          </div>
+          {info && (
+            <button
+              className={`icon-button titlebar-command panel-toggle ${detailsOpen ? "active" : ""}`}
+              aria-label={t("navigator")}
+              aria-pressed={detailsOpen}
+              title={t("navigator")}
+              onClick={() => setDetailsOpen((value) => !value)}
+            >
+              <PanelLeft size={17} />
+            </button>
+          )}
+          <span className="titlebar-divider" />
+          <button
+            className="icon-button titlebar-command"
+            disabled={busy}
+            aria-label={t("open")}
+            title={`${t("open")} · ${isMac ? "⌘" : "Ctrl+"}O`}
+            onClick={() => void openFile()}
+          >
+            <FolderOpen size={17} />
+          </button>
+          <button
+            className="icon-button titlebar-command"
+            disabled={busy}
+            aria-label={t("new")}
+            title={`${t("new")} · ${isMac ? "⌘" : "Ctrl+"}N`}
+            onClick={() => void importData("")}
+          >
+            <FilePlus2 size={17} />
+          </button>
+          <button
+            className="icon-button titlebar-command"
+            disabled={busy}
+            aria-label={t("paste")}
+            title={t("paste")}
+            onClick={() => setPasteOpen(true)}
+          >
+            <ClipboardPaste size={17} />
+          </button>
+          <button
+            className="icon-button titlebar-command"
+            disabled={!info || busy || changed}
+            aria-label={t("save")}
+            title={`${t("save")} · ${isMac ? "⌘" : "Ctrl+"}S`}
+            onClick={() => void saveDocument()}
+          >
+            <Save size={17} />
+          </button>
+          <button
+            className="icon-button titlebar-command"
+            disabled={!info || busy || changed}
+            aria-label={t("saveAs")}
+            title={t("saveAs")}
+            onClick={() => void saveDocument(true)}
+          >
+            <SaveAll size={17} />
+          </button>
         </div>
-        <div className="titlebar-center" data-tauri-drag-region>
-          {info?.name ?? t("local")}
-          {info?.dirty && <span className="dirty-dot" title={t("unsaved")} />}
+        <div className="titlebar-search">
+          <div className="search-box">
+            <Search size={15} />
+            <input
+              ref={searchInput}
+              aria-label={t("search")}
+              placeholder={t("search")}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActiveHit(-1);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  window.clearTimeout(searchTimer.current);
+                  void runSearch();
+                }
+              }}
+            />
+            {query && (
+              <>
+                <span className="match-count">
+                  {searching ? "…" : hits.length}
+                </span>
+                <button
+                  className="icon-button"
+                  aria-label={t("findNext")}
+                  onClick={() => {
+                    if (hits.length) {
+                      const next = (activeHit + 1) % hits.length;
+                      setActiveHit(next);
+                      void jumpHit(hits[next]);
+                    }
+                  }}
+                >
+                  <ChevronRight size={14} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label={t("close")}
+                  onClick={() => setQuery("")}
+                >
+                  <X size={13} />
+                </button>
+              </>
+            )}
+          </div>
+          <select
+            className="search-mode-select"
+            aria-label={t("searchMode")}
+            value={searchMode}
+            onChange={(e) => setSearchMode(e.target.value)}
+          >
+            <option value="raw">{t("rawSearch")}</option>
+            <option value="key">{t("keySearch")}</option>
+            <option value="value">{t("valueSearch")}</option>
+          </select>
         </div>
-        <div className="preferences">
+        <div className="titlebar-trailing">
+          <div className="zoom-controls" aria-label={t("fontSize")}>
+            <button
+              className="icon-button"
+              aria-label={t("zoomOut")}
+              disabled={fontScale <= 80}
+              onClick={() => setFontScale((value) => Math.max(80, value - 10))}
+            >
+              <ZoomOut size={16} />
+            </button>
+            <button
+              className="zoom-value"
+              title={`${isMac ? "⌘" : "Ctrl"}+0`}
+              onClick={() => setFontScale(100)}
+            >
+              {fontScale}%
+            </button>
+            <button
+              className="icon-button"
+              aria-label={t("zoomIn")}
+              disabled={fontScale >= 180}
+              onClick={() => setFontScale((value) => Math.min(180, value + 10))}
+            >
+              <ZoomIn size={16} />
+            </button>
+          </div>
+          {info && (
+            <button
+              className={`icon-button titlebar-command panel-toggle ${searchOpen ? "active" : ""}`}
+              aria-label={t("searchResults")}
+              aria-pressed={searchOpen}
+              title={t("searchResults")}
+              onClick={() => setSearchOpen((value) => !value)}
+            >
+              <PanelRight size={17} />
+            </button>
+          )}
           <label className="preference">
             <Languages size={15} />
             <select
@@ -617,181 +777,16 @@ export default function App() {
           </label>
         </div>
       </header>
-      <div className="toolbar">
-        {info && (
-          <button
-            className={`icon-button panel-toggle ${detailsOpen ? "active" : ""}`}
-            aria-label={t("fileDetails")}
-            aria-pressed={detailsOpen}
-            title={t("fileDetails")}
-            onClick={() => setDetailsOpen((value) => !value)}
-          >
-            <PanelLeft size={17} />
-          </button>
-        )}
-        <button
-          className="toolbar-button primary-open"
-          disabled={busy}
-          onClick={() => void openFile()}
-        >
-          <FolderOpen size={17} />
-          {t("open")}
-          <kbd>{isMac ? "⌘" : "Ctrl+"}O</kbd>
-        </button>
-        <button
-          className="toolbar-button"
-          disabled={busy}
-          onClick={() => void importData("")}
-        >
-          <FilePlus2 size={16} />
-          {t("new")}
-        </button>
-        <button
-          className="toolbar-button"
-          disabled={busy}
-          onClick={() => setPasteOpen(true)}
-        >
-          <ClipboardPaste size={16} />
-          {t("paste")}
-        </button>
-        <span className="toolbar-divider" />
-        <button
-          className="toolbar-button"
-          disabled={!info || busy || changed}
-          onClick={() => void saveDocument()}
-        >
-          <Save size={16} />
-          {t("save")}
-        </button>
-        <button
-          className="toolbar-button"
-          disabled={!info || busy || changed}
-          onClick={() => void saveDocument(true)}
-        >
-          {t("saveAs")}
-        </button>
-        <div className="search-box">
-          <Search size={15} />
-          <input
-            ref={searchInput}
-            aria-label={t("search")}
-            placeholder={t("search")}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setActiveHit(-1);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                window.clearTimeout(searchTimer.current);
-                void runSearch();
-              }
-            }}
-          />
-          {query && (
-            <>
-              <span className="match-count">
-                {searching ? "…" : hits.length}
-              </span>
-              <button
-                className="icon-button"
-                aria-label={t("findNext")}
-                onClick={() => {
-                  if (hits.length) {
-                    const next = (activeHit + 1) % hits.length;
-                    setActiveHit(next);
-                    void jumpHit(hits[next]);
-                  }
-                }}
-              >
-                <ChevronRight size={14} />
-              </button>
-              <button
-                className="icon-button"
-                aria-label={t("close")}
-                onClick={() => setQuery("")}
-              >
-                <X size={13} />
-              </button>
-            </>
-          )}
-        </div>
-        <select
-          aria-label={t("searchMode")}
-          value={searchMode}
-          onChange={(e) => setSearchMode(e.target.value)}
-        >
-          <option value="raw">{t("rawSearch")}</option>
-          <option value="key">{t("keySearch")}</option>
-          <option value="value">{t("valueSearch")}</option>
-        </select>
-        <button
-          className="icon-button"
-          aria-label={searching ? t("stop") : t("fileSearch")}
-          disabled={!info || busy || !query}
-          onClick={() => {
-            if (searching) {
-              searchToken.current++;
-              setSearching(false);
-            } else {
-              window.clearTimeout(searchTimer.current);
-              void runSearch();
-            }
-          }}
-        >
-          {searching ? <X size={15} /> : <Search size={15} />}
-        </button>
-        <div className="zoom-controls" aria-label={t("fontSize")}>
-          <button
-            className="icon-button"
-            aria-label={t("zoomOut")}
-            disabled={fontScale <= 80}
-            onClick={() => setFontScale((value) => Math.max(80, value - 10))}
-          >
-            <ZoomOut size={16} />
-          </button>
-          <button
-            className="zoom-value"
-            title={`${isMac ? "⌘" : "Ctrl"}+0`}
-            onClick={() => setFontScale(100)}
-          >
-            {fontScale}%
-          </button>
-          <button
-            className="icon-button"
-            aria-label={t("zoomIn")}
-            disabled={fontScale >= 180}
-            onClick={() => setFontScale((value) => Math.min(180, value + 10))}
-          >
-            <ZoomIn size={16} />
-          </button>
-        </div>
-        {info && (
-          <button
-            className={`icon-button panel-toggle ${searchOpen ? "active" : ""}`}
-            aria-label={t("searchResults")}
-            aria-pressed={searchOpen}
-            title={t("searchResults")}
-            onClick={() => setSearchOpen((value) => !value)}
-          >
-            <PanelRight size={17} />
-          </button>
-        )}
-        <span className="privacy-badge">
-          <ShieldCheck size={14} />
-          {t("local")}
-        </span>
-      </div>
       {info ? (
         <div
           className={`workspace ${detailsOpen ? "details-open" : ""} ${searchOpen ? "search-open" : ""}`}
         >
           {detailsOpen && (
-            <aside className="file-sidebar" aria-label={t("fileDetails")}>
+            <aside className="file-sidebar" aria-label={t("navigator")}>
               <header className="sidebar-header">
                 <span>
-                  <FileJson2 size={15} />
-                  {t("fileDetails")}
+                  <SlidersHorizontal size={15} />
+                  {t("navigator")}
                 </span>
                 <button
                   className="icon-button"
@@ -801,7 +796,80 @@ export default function App() {
                   <X size={14} />
                 </button>
               </header>
+              <nav className="sidebar-section" aria-label={t("viewMode")}>
+                <span className="sidebar-section-title">{t("views")}</span>
+                <div className="view-list">
+                  {(
+                    ["tree", "pretty", "wrap", "raw", "source"] as ViewMode[]
+                  ).map((value) => (
+                    <button
+                      key={value}
+                      aria-pressed={mode === value}
+                      className={mode === value ? "active" : ""}
+                      onClick={() => setMode(value)}
+                    >
+                      {value === "tree" && <Braces size={15} />}
+                      {value === "pretty" && <AlignLeft size={15} />}
+                      {value === "wrap" && <WrapText size={15} />}
+                      {value === "raw" && <Rows3 size={15} />}
+                      {value === "source" && <FileCode2 size={15} />}
+                      <span>{t(value)}</span>
+                    </button>
+                  ))}
+                </div>
+              </nav>
+              <section className="sidebar-section">
+                <span className="sidebar-section-title">
+                  {t("documentActions")}
+                </span>
+                <button
+                  className="sidebar-primary-action"
+                  disabled={busy || changed || Boolean(editor)}
+                  onClick={() =>
+                    setEditor({
+                      line: info.totalLines + 1,
+                      text: "{}",
+                      insert: true,
+                    })
+                  }
+                >
+                  <Plus size={15} />
+                  {t("add")}
+                </button>
+              </section>
+              {mode === "tree" && (
+                <section className="sidebar-section">
+                  <span className="sidebar-section-title">
+                    {t("treeOptions")}
+                  </span>
+                  <div className="tree-sidebar-actions">
+                    <button onClick={() => setTreeDepth(129)}>
+                      {t("expand")}
+                    </button>
+                    <button onClick={() => setTreeDepth(0)}>
+                      {t("collapse")}
+                    </button>
+                  </div>
+                  <div className="depth-selector">
+                    {[1, 2, 3].map((value) => (
+                      <button
+                        className={depth === value ? "active" : ""}
+                        key={value}
+                        onClick={() => setTreeDepth(value)}
+                      >
+                        {t("depth")} {value}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="sidebar-hint">
+                    {isMac ? "Option" : "Alt"} + click
+                  </span>
+                </section>
+              )}
               <section className="file-info">
+                <span className="sidebar-section-title">
+                  {t("fileDetails")}
+                </span>
                 <div className="file-heading">
                   <div>
                     <h1>
@@ -866,35 +934,13 @@ export default function App() {
             </aside>
           )}
           <section className="editor-shell">
-            <div className="reader-controls">
-              <button
-                className="small-button"
-                disabled={busy || changed}
-                onClick={() =>
-                  setEditor({
-                    line: info.totalLines + 1,
-                    text: "{}",
-                    insert: true,
-                  })
-                }
-              >
-                <Plus size={13} />
-                {t("add")}
-              </button>
-              <div className="segmented" aria-label={t("viewMode")}>
-                {(
-                  ["tree", "pretty", "wrap", "raw", "source"] as ViewMode[]
-                ).map((value) => (
-                  <button
-                    key={value}
-                    aria-pressed={mode === value}
-                    className={mode === value ? "active" : ""}
-                    onClick={() => setMode(value)}
-                  >
-                    {value === "tree" && <Braces size={13} />}
-                    {t(value)}
-                  </button>
-                ))}
+            <div className="document-bar">
+              <div className="document-identity">
+                <FileJson2 size={15} />
+                <strong>{info.name}</strong>
+                {info.dirty && (
+                  <span className="unsaved-label">{t("unsaved")}</span>
+                )}
               </div>
               <div className="range-controls">
                 <label>
@@ -990,27 +1036,25 @@ export default function App() {
                 </button>
               </div>
             </div>
-            {mode === "tree" && (
-              <div className="tree-tools">
-                <span>
-                  <PanelTop size={12} />
-                  JSON TREE
-                </span>
-                <button onClick={() => setTreeDepth(129)}>{t("expand")}</button>
-                <button onClick={() => setTreeDepth(0)}>{t("collapse")}</button>
-                <span className="tools-divider" />
-                {[1, 2, 3].map((n) => (
-                  <button
-                    className={depth === n ? "selected-depth" : ""}
-                    key={n}
-                    onClick={() => setTreeDepth(n)}
-                  >
-                    {t("depth")} {n}
-                  </button>
-                ))}
-                <span className="tree-hint">
-                  {isMac ? "Option" : "Alt"} + click ↳
-                </span>
+            {editor?.insert && (
+              <div className="new-record-editor">
+                <Suspense
+                  fallback={<div className="loading">{t("loading")}</div>}
+                >
+                  <RecordEditor
+                    inline
+                    text={editor.text}
+                    title={`${t("add")} · L${editor.line}`}
+                    onClose={() => setEditor(null)}
+                    onApply={(text) =>
+                      applyEdit({
+                        kind: "insert",
+                        line: editor.line,
+                        text,
+                      })
+                    }
+                  />
+                </Suspense>
               </div>
             )}
             {changed && (
@@ -1032,7 +1076,7 @@ export default function App() {
               </div>
             )}
             <main className="reader" ref={scroll} aria-busy={busy}>
-              {busy ? (
+              {busy && !editor ? (
                 <div className="loading">
                   <LoaderCircle size={22} className="spin" />
                   {t("loading")}
@@ -1079,9 +1123,34 @@ export default function App() {
                         treeState={stateFor(records[item.index].line)}
                         depth={depth}
                         copy={(text) => void copy(text)}
-                        disabled={busy || changed}
+                        disabled={busy || changed || Boolean(editor)}
                         query={query}
                         fontScale={fontScale / 100}
+                        inlineEditor={
+                          editor &&
+                          !editor.insert &&
+                          editor.line === records[item.index].line ? (
+                            <Suspense
+                              fallback={
+                                <div className="loading">{t("loading")}</div>
+                              }
+                            >
+                              <RecordEditor
+                                inline
+                                text={editor.text}
+                                title={`${t("edit")} · L${editor.line}`}
+                                onClose={() => setEditor(null)}
+                                onApply={(text) =>
+                                  applyEdit({
+                                    kind: "replace",
+                                    line: editor.line,
+                                    text,
+                                  })
+                                }
+                              />
+                            </Suspense>
+                          ) : undefined
+                        }
                         search={(text) => {
                           setQuery(text);
                           setSearchOpen(true);
@@ -1284,22 +1353,6 @@ export default function App() {
             {t("discard")}
           </button>
         </div>
-      )}
-      {editor && (
-        <Suspense fallback={<div className="toast">{t("loading")}</div>}>
-          <RecordEditor
-            text={editor.text}
-            title={`${t(editor.insert ? "add" : "edit")} · L${editor.line}`}
-            onClose={() => setEditor(null)}
-            onApply={(text) =>
-              applyEdit({
-                kind: editor.insert ? "insert" : "replace",
-                line: editor.line,
-                text,
-              })
-            }
-          />
-        </Suspense>
       )}
       {pasteOpen && (
         <div
