@@ -18,6 +18,8 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 
 ## M2 checks
 
+- Save now reuses the already validated temporary-file index after atomic rename, instead of rescanning the saved file and retaining two new index allocations. Metadata changes after rename are rejected. The index-allocation reuse regression passes; Rust core tests total 17.
+
 - M2 frontend lint, strict TypeScript and production build passed; CodeMirror is a separate lazy-loaded chunk.
 - Playwright: all 4 scenarios passed, including invalid edit rejection, large-integer editing, duplicate/delete/add and full-document search with pointer expansion.
 - Rust: 16 tests cover baseline reading plus edit sequencing, source and destination conflict refusal, failed writes, recovery roundtrip, stale revisions, invalid bytes, BOM insertion and Unix permissions/symlink protection.

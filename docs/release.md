@@ -41,11 +41,11 @@ CI builds on Ubuntu 24.04 and launches the extracted AppImage executable under X
 
 ## macOS signing gate
 
-Public macOS publication requires all six repository secrets:
+Public macOS publication is paused by default. It requires explicitly setting repository variable `MACOS_PUBLIC_RELEASE_ENABLED=true` and all six repository secrets:
 
 `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`.
 
-Without them the tag workflow publishes Linux only. PR builds can produce unsigned DMG review artifacts. With credentials, Tauri signs and notarizes, then checks `codesign`, `spctl`, and Staple. The signed DMG is included only if these checks pass.
+Without the opt-in variable the tag workflow publishes Linux only, even if credentials are later configured. PR builds produce unsigned DMG review artifacts with Apple signing variables removed from the process environment; empty certificate variables must not trigger a keychain import. With opt-in and credentials, Tauri signs and notarizes, then checks `codesign`, `spctl`, and Staple.
 
 Initial target is Apple Silicon `aarch64-apple-darwin`. Intel/Universal is not included. Apple Developer enrollment, signing credentials and macOS device qualification require the maintainer's account/device; the agent cannot manufacture them.
 
