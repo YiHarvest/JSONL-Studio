@@ -16,6 +16,7 @@ import {
   type RecordData,
   type ViewMode,
 } from "../model";
+import { HighlightText } from "./HighlightText";
 import { JsonTree, type TreeState } from "./tree/JsonTree";
 
 export function RecordCard({
@@ -29,6 +30,8 @@ export function RecordCard({
   remove,
   disabled,
   search,
+  query,
+  fontScale,
 }: {
   record: RecordData;
   mode: ViewMode;
@@ -40,6 +43,8 @@ export function RecordCard({
   remove: () => void;
   disabled: boolean;
   search: (text: string) => void;
+  query: string;
+  fontScale: number;
 }) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(treeState.collapsed ?? false);
@@ -125,7 +130,9 @@ export function RecordCard({
                   : ""}
               </span>
             </div>
-            <pre>{record.raw || "∅"}</pre>
+            <pre>
+              <HighlightText text={record.raw || "∅"} query={query} />
+            </pre>
           </div>
         ) : mode === "tree" && parsed ? (
           <JsonTree
@@ -135,10 +142,15 @@ export function RecordCard({
             copy={copy}
             edit={edit}
             search={search}
+            query={query}
+            fontScale={fontScale}
           />
         ) : (
           <pre className={`record-raw ${mode === "wrap" ? "wrapped" : ""}`}>
-            {mode === "pretty" && parsed ? pretty(parsed) : record.raw}
+            <HighlightText
+              text={mode === "pretty" && parsed ? pretty(parsed) : record.raw}
+              query={query}
+            />
           </pre>
         ))}
     </article>

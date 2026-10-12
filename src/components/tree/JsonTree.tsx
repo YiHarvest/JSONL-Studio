@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight, MoreHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { pointer, type JsonNode } from "../../model";
+import { HighlightText } from "../HighlightText";
 
 export interface TreeState {
   open: Map<string, boolean>;
@@ -25,6 +26,8 @@ export function JsonTree({
   copy,
   edit,
   search,
+  query,
+  fontScale,
 }: {
   root: JsonNode;
   state: TreeState;
@@ -32,11 +35,14 @@ export function JsonTree({
   copy: (text: string) => void;
   edit: () => void;
   search: (text: string) => void;
+  query: string;
+  fontScale: number;
 }) {
   const { t } = useTranslation();
   const [version, update] = useState(0);
   const [menu, setMenu] = useState<string | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
+  const rowHeight = Math.round(28 * fontScale);
   const isOpen = (path: string, depth: number) =>
     state.open.get(path) ?? depth < defaultDepth;
   const rows = useMemo(() => {
@@ -91,9 +97,12 @@ export function JsonTree({
   const virtual = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scroll.current,
-    estimateSize: () => 28,
+    estimateSize: () => rowHeight,
     overscan: 8,
   });
+  useEffect(() => {
+    virtual.measure();
+  }, [rowHeight, virtual]);
   useEffect(() => {
     if (state.hit === undefined) return;
     const index = rows.findIndex((row) => row.path === state.hit);
@@ -119,7 +128,12 @@ export function JsonTree({
     <div
       ref={scroll}
       className="tree-scroll"
-      style={{ height: Math.min(rows.length * 28 + 8, 420) }}
+      style={{
+        height: Math.min(
+          rows.length * rowHeight + 8,
+          Math.round(420 * fontScale),
+        ),
+      }}
       role="tree"
       aria-label="JSON"
     >
@@ -182,7 +196,7 @@ export function JsonTree({
                 <span className="leaf-spacer" />
               )}
               <span className={`node-key ${row.depth === 0 ? "root-key" : ""}`}>
-                {row.key}
+                <HighlightText text={row.key} query={query} />
               </span>
               <span className="colon">:</span>
               <span className={`type-tag type-${row.node.type}`}>
@@ -197,14 +211,17 @@ export function JsonTree({
                   {!opened && (
                     <span className="preview-keys">
                       {" "}
-                      {row.node
-                        .children!.slice(0, 3)
-                        .map((c) =>
-                          row.node.type === "object"
-                            ? c.key
-                            : c.node.text.slice(0, 20),
-                        )
-                        .join(", ")}
+                      <HighlightText
+                        text={row.node
+                          .children!.slice(0, 3)
+                          .map((c) =>
+                            row.node.type === "object"
+                              ? c.key
+                              : c.node.text.slice(0, 20),
+                          )
+                          .join(", ")}
+                        query={query}
+                      />
                       {row.node.children!.length > 3 ? ", …" : ""}
                     </span>
                   )}
@@ -214,7 +231,10 @@ export function JsonTree({
                   className={`node-value value-${row.node.type}`}
                   title={row.node.text}
                 >
-                  {row.node.text.slice(0, 500)}
+                  <HighlightText
+                    text={row.node.text.slice(0, 500)}
+                    query={query}
+                  />
                   {row.node.text.length > 500 ? "…" : ""}
                 </span>
               )}

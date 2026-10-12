@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseTree, pointer, pretty } from "./model";
+import { renderToStaticMarkup } from "react-dom/server";
+import { HighlightText } from "./components/HighlightText";
 import en from "./locales/en.json";
 import zh from "./locales/zh.json";
 
@@ -28,5 +30,13 @@ describe("lossless visible tree", () => {
   });
   it("ships matching English and Chinese message keys", () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
+  });
+  it("highlights every case-insensitive visible match", () => {
+    const markup = renderToStaticMarkup(
+      HighlightText({ text: "model MODEL remodel", query: "model" }),
+    );
+    expect(markup.match(/<mark/g)).toHaveLength(3);
+    expect(markup).toContain("re<mark");
+    expect(markup).toContain(">model</mark>");
   });
 });
