@@ -108,22 +108,39 @@ test("sample, error isolation, views and range navigation", async ({
   await expect(page.locator(".statusbar")).toContainText("3–5");
 });
 
-test("paste array, lazy tree and locale/theme preferences", async ({
+test("new file editor copies and imports arrays with lazy tree", async ({
   page,
+  context,
 }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page
-    .getByRole("button", { name: "Paste", exact: true })
-    .first()
+    .locator(".titlebar")
+    .getByRole("button", { name: "New", exact: true })
     .click();
+  const draft = JSON.stringify([
+    { items: Array.from({ length: 120 }, (_, i) => i) },
+    false,
+  ]);
+  const editor = page.getByRole("textbox", {
+    name: "Document JSONL",
+    exact: true,
+  });
+  await editor.fill('{"stale":true}');
+  page.once("dialog", (dialog) => void dialog.accept());
   await page
-    .getByRole("textbox", { name: "JSON, a JSON array", exact: false })
-    .fill(
-      JSON.stringify([
-        { items: Array.from({ length: 120 }, (_, i) => i) },
-        false,
-      ]),
-    );
-  await page.getByRole("button", { name: "Import", exact: true }).click();
+    .locator(".titlebar")
+    .getByRole("button", { name: "New", exact: true })
+    .click();
+  await expect(editor).toHaveValue("");
+  await editor.fill(draft);
+  await page.getByRole("button", { name: "Copy all", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(draft);
+  await expect(page.locator(".modal-backdrop")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Apply changes", exact: true })
+    .click();
   await expect(await openFileDetails(page)).toContainText("2 lines");
   await expect(
     page.getByRole("button", { name: "Load 50 more", exact: false }),
