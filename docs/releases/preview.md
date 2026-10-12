@@ -12,9 +12,9 @@ Local JSONL/NDJSON reader and editor. No Node.js or Rust installation is needed.
 
 ### Included / 功能
 
-Tree/Pretty/Raw/original views, independent invalid-line handling, range navigation, Chinese/English and themes, CodeMirror record editing, insert/duplicate/delete, whole-file raw/key/value search, atomic Save/Save As and local recovery.
+Tree/Pretty/Raw/original views, collapsible file/search sidebars, persistent content font scaling, independent invalid-line handling, range navigation, Chinese/English and themes, CodeMirror record editing, insert/duplicate/delete, live whole-file raw/key/value search with highlighted matches, atomic Save/Save As and local recovery.
 
-树形与原文阅读、坏行隔离、分页跳转、中英文与主题、记录编辑增删复制、全文件搜索、安全保存、另存为和本地恢复。
+树形与原文阅读、可折叠文件/搜索侧栏、内容字号缩放、坏行隔离、分页跳转、中英文与主题、记录编辑增删复制、实时全文件搜索与命中高亮、安全保存、另存为和本地恢复。
 
 ### Preview limits / 预览限制
 
