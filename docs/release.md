@@ -1,6 +1,6 @@
 # Preview package delivery
 
-The preview version is `0.1.0-beta.2`. Feature changes arrive through module PRs targeting `dev`; the maintainer merges manually. GitHub automatically deletes merged feature branches.
+The preview version is `0.1.0-beta.3`. Feature changes arrive through module PRs targeting `dev`; the maintainer merges manually. GitHub automatically deletes merged feature branches.
 
 ## Before merge
 
@@ -15,9 +15,9 @@ Confirm all three module PRs have been merged and `dev` checks pass. Only tag th
 ```fish
 git switch dev
 git pull --ff-only origin dev
-node scripts/release.mjs version v0.1.0-beta.2
-git tag -a v0.1.0-beta.2 -m "JSONL Studio preview"
-git push origin v0.1.0-beta.2
+node scripts/release.mjs version v0.1.0-beta.3
+git tag -a v0.1.0-beta.3 -m "JSONL Studio preview"
+git push origin v0.1.0-beta.3
 ```
 
 The tag workflow builds installers, validates the tag against package/Tauri/Cargo/lock versions, checks SHA-256 and creates a GitHub prerelease with the installers and combined `SHA256SUMS`. No unmerged branch is tagged by the agent.
@@ -35,7 +35,7 @@ node scripts/release.mjs verify release-artifacts
 
 Tauri explicitly uses `mainBinaryName: jsonl-studio`; the separate benchmark executable must never be packaged as the app.
 
-Stable asset name: `JSONL-Studio_0.1.0-beta.2_linux-x86_64.AppImage`. Download, allow execution and launch. FUSE 2 may be required; extraction mode works without it. Arch `PKGBUILD` references the prerelease tag and is a source-package template, not a submitted AUR package. AppImage does not automatically install MIME or application-menu integration.
+Stable asset name: `JSONL-Studio_0.1.0-beta.3_linux-x86_64.AppImage`. Download, allow execution and launch. FUSE 2 may be required; extraction mode works without it. Arch `PKGBUILD` references the prerelease tag and is a source-package template, not a submitted AUR package. AppImage does not automatically install MIME or application-menu integration.
 
 CI builds on Ubuntu 24.04 and launches the extracted AppImage executable under Xvfb without a development server. Test separately on Arch/GNOME/KDE before broad stable distribution.
 
