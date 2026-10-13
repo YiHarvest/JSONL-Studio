@@ -1,10 +1,12 @@
 pub mod core;
 pub mod document;
+pub mod lazy_tree;
 
 #[cfg(feature = "desktop")]
 mod desktop {
     use super::core::{Page, Session};
     use super::document::{Document, DocumentInfo, Edit, SearchPage};
+    use super::lazy_tree::TreePage;
     use std::{
         path::PathBuf,
         sync::{Arc, Mutex},
@@ -78,6 +80,22 @@ mod desktop {
         tauri::async_runtime::spawn_blocking(move || document.validate())
             .await
             .map_err(|e| e.to_string())?
+    }
+    #[tauri::command]
+    async fn read_tree_node(
+        line: usize,
+        route: Vec<usize>,
+        offset: usize,
+        limit: usize,
+        state: State<'_, AppState>,
+    ) -> Result<TreePage, String> {
+        let session = current(&state)?;
+        let document = session.lock().map_err(|e| e.to_string())?.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            document.tree_page(line, &route, offset, limit)
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
     #[tauri::command]
     async fn edit_record(
@@ -207,6 +225,7 @@ mod desktop {
                 read_page,
                 file_changed,
                 validate_file,
+                read_tree_node,
                 pending_files,
                 edit_record,
                 save_document,

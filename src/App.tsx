@@ -69,6 +69,7 @@ const RecordEditor = lazy(() =>
 import { RecordCard } from "./components/RecordCard";
 import { HighlightText } from "./components/HighlightText";
 import type { TreeState } from "./components/tree/JsonTree";
+import { LazyJsonTree } from "./components/tree/LazyJsonTree";
 import i18n, { systemLanguage } from "./i18n";
 import { sample } from "./sample";
 import packageInfo from "../package.json";
@@ -1249,6 +1250,23 @@ export default function App() {
                                   }
                                 />
                               </Suspense>
+                            ) : undefined
+                          }
+                          lazyTree={
+                            records[item.index].truncated ? (
+                              <LazyJsonTree
+                                line={records[item.index].line}
+                                state={stateFor(records[item.index].line)}
+                                defaultDepth={depth}
+                                copy={(text) => void copy(text)}
+                                search={(text) => {
+                                  setQuery(text);
+                                  setSearchOpen(true);
+                                  searchInput.current?.focus();
+                                }}
+                                query={query}
+                                fontScale={fontScale / 100}
+                              />
                             ) : undefined
                           }
                           search={(text) => {

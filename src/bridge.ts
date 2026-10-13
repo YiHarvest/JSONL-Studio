@@ -1,5 +1,13 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { Edit, Info, Page, RecordData, SearchPage } from "./model";
+import type {
+  Edit,
+  Info,
+  Page,
+  RecordData,
+  SearchPage,
+  TreeNodeSummary,
+  TreePage,
+} from "./model";
 import { parseTree } from "./model";
 
 export const desktop = isTauri();
@@ -190,4 +198,43 @@ export async function validateFile(): Promise<[number, number]> {
     }
   }
   return [valid, preview.length - valid];
+}
+export async function readTreeNode(
+  line: number,
+  route: number[],
+  offset: number,
+  limit = 50,
+): Promise<TreePage> {
+  if (desktop) return invoke("read_tree_node", { line, route, offset, limit });
+  let node = parseTree(preview[line - 1]);
+  for (const index of route) {
+    const child = node.children?.[index];
+    if (!child) throw new Error("Tree path not found");
+    node = child.node;
+  }
+  const children = node.children ?? [];
+  return {
+    node: summarizeNode(node),
+    children: children.slice(offset, offset + limit).map((child, index) => ({
+      index: offset + index,
+      key: child.key,
+      node: summarizeNode(child.node),
+    })),
+    offset,
+    totalChildren: children.length,
+    hasMore: offset + limit < children.length,
+  };
+}
+function summarizeNode(node: ReturnType<typeof parseTree>): TreeNodeSummary {
+  const encoded = node.children ? null : new TextEncoder().encode(node.text);
+  return {
+    kind: node.type,
+    text: node.children
+      ? node.type === "object"
+        ? "{"
+        : "["
+      : new TextDecoder().decode(encoded!.slice(0, 500)),
+    childCount: node.children?.length ?? null,
+    truncated: encoded !== null && encoded.length > 500,
+  };
 }

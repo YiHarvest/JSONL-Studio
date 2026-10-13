@@ -48,7 +48,16 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 - Rust tests cover a valid oversized record, invalid syntax beyond the 2 MiB preview boundary, invalid UTF-8 isolation and the `Document` validation path. All 19 Rust tests, fmt and all-target clippy with `-D warnings` passed.
 - Frontend ESLint, Prettier, Vitest (5 tests) and production build passed. Playwright Chromium passed all 6 scenarios, including the 2 MiB+ record regression.
 - A 1,200 × 820 Playwright visual check measured equal body client/scroll widths of 1,200 px, a 940 px record card and a 1,200 px titlebar. The limited state, separate validation count and long raw preview rendered without page-level horizontal overflow.
-- Tree/Pretty editing remains unavailable for oversized records because those operations require the complete record in the frontend. Raw and Original surfaces show only the bounded preview; explicit validation is complete but does not make the entire record renderable.
+- Pretty editing remains unavailable for oversized records because it requires the complete record in the frontend. Raw and Original surfaces show only the bounded preview; explicit validation is complete.
+
+## Lazy tree for oversized records
+
+- Oversized records now expose a Rust-backed lazy Tree view while Raw and Original remain capped at the first 2 MiB. The frontend requests the root or one expanded route at a time and never receives the complete record.
+- Each tree response contains at most 50 direct children. Scalar text previews are capped at 500 bytes, routes are capped at 128 levels and the existing frontend tree remains capped at 10,000 flattened rows.
+- Routes use per-level child indexes rather than object keys, so duplicate keys remain separately addressable. Displayed JSON Pointer and JSONPath labels retain escaped source keys.
+- Rust tests cover multi-megabyte strings, nested object/array routes, child pagination, duplicate source tokens, invalid paths and invalid UTF-8. The desktop `Session` and edited `Document` paths are covered in addition to the parser unit tests.
+- Playwright covers a 2 MiB+ record in Tree mode, lazy loading through array item 99, switching to bounded Raw and returning to Tree. The full 6-scenario suite passed.
+- Playwright visual checks at 1,200 × 820 and 900 × 700 measured body scroll width equal to client width. The tree measured 938 px and 874 px respectively, retained nested hierarchy and scalar truncation, and produced no page-level horizontal overflow.
 
 ## Reproduce benchmarks
 

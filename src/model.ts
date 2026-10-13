@@ -37,6 +37,24 @@ export interface Page {
   nextLine: number;
   hasMore: boolean;
 }
+export interface TreeNodeSummary {
+  kind: JsonNode["type"];
+  text: string;
+  childCount: number | null;
+  truncated: boolean;
+}
+export interface TreeChild {
+  index: number;
+  key: string;
+  node: TreeNodeSummary;
+}
+export interface TreePage {
+  node: TreeNodeSummary;
+  children: TreeChild[];
+  offset: number;
+  totalChildren: number;
+  hasMore: boolean;
+}
 export type ViewMode = "tree" | "pretty" | "wrap" | "raw" | "source";
 
 // JSON.parse loses precision for large integers. This tokenizer retains every

@@ -22,7 +22,7 @@ JSONL Studio is a local desktop JSONL/NDJSON reader and future lightweight edito
 - A single record may contain duplicate object keys; the tree preserves them. Duplicate-key folding shares the same JSON Pointer.
 - Raw and Original do not reserialize records. Pretty retains original numeric tokens.
 - Original displays the selected source range within the record preview limit, including its newline spelling. Invalid UTF-8 is displayed with replacement characters; it is not a byte export.
-- Every IPC page is capped at 1,000 lines and 8 MiB input bytes; record preview is capped at 2 MiB. Oversized lines are shown as neutral, preview-limited records rather than parse errors and are never silently parsed into a frontend tree.
+- Every IPC page is capped at 1,000 lines and 8 MiB input bytes; Raw/Original record previews are capped at 2 MiB. Oversized lines are shown as neutral, preview-limited records rather than parse errors. Their Tree view is streamed from Rust in pages of at most 50 direct children with scalar previews capped at 500 bytes; expanding a node requests only that route.
 - All/custom count is a browsing scope, not an instruction to transfer the entire file into JavaScript. Next continues at the actual returned line.
 - Paste is capped at 8 MiB; larger inputs use disk opening.
 - Valid/error counts initially describe parsed records in the returned range, with oversized previews counted separately as preview-limited. Explicit validation streams every complete physical line in Rust without constructing a full JSON value, so oversized records receive a real valid/error result.

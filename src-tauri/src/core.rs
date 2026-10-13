@@ -1,3 +1,4 @@
+use crate::lazy_tree::{read_tree_page, TreePage};
 use serde::{de::IgnoredAny, Deserialize, Serialize};
 use std::{
     fs::{File, Metadata},
@@ -333,6 +334,44 @@ impl Session {
         self.validate_range(1, self.info.total_lines + 1)
     }
 
+    pub(crate) fn tree_page(
+        &self,
+        line: usize,
+        route: &[usize],
+        offset: usize,
+        limit: usize,
+    ) -> Result<TreePage, String> {
+        if line == 0 || line > self.info.total_lines {
+            return Err("Line out of range".into());
+        }
+        if self.changed() {
+            return Err("File changed on disk; reload before reading".into());
+        }
+        let mut start = self.offsets[line - 1];
+        if line == 1 && self.info.encoding == "UTF-8 BOM" {
+            start += 3;
+        }
+        let end = self.offsets[line];
+        let result = match &self.source {
+            Source::Disk { path, .. } => {
+                let mut file = File::open(path).map_err(|e| e.to_string())?;
+                file.seek(SeekFrom::Start(start))
+                    .map_err(|e| e.to_string())?;
+                read_tree_page(file.take(end - start), route, offset, limit)
+            }
+            Source::Memory(data) => read_tree_page(
+                std::io::Cursor::new(&data[start as usize..end as usize]),
+                route,
+                offset,
+                limit,
+            ),
+        }?;
+        if self.changed() {
+            return Err("File changed during tree reading".into());
+        }
+        Ok(result)
+    }
+
     pub(crate) fn validate_range(&self, from: usize, to: usize) -> Result<(usize, usize), String> {
         if from == 0 || from > to || to > self.info.total_lines + 1 {
             return Err("Invalid validation range".into());
@@ -552,13 +591,20 @@ mod tests {
     fn oversized_valid_record_is_stream_validated_without_becoming_preview_error() {
         let mut data = br#"{"payload":""#.to_vec();
         data.extend(std::iter::repeat_n(b'x', MAX_RECORD));
-        data.extend_from_slice(b"\"}\n");
+        data.extend_from_slice(b"\",\"nested\":{\"items\":[0,1,2]}}\n");
         let (_f, s) = disk(&data);
         let record = &s.page(1, 1).unwrap().records[0];
         assert!(record.truncated);
         assert!(record.error.is_none());
         assert!(record.json.is_none());
         assert_eq!(s.validate().unwrap(), (1, 0));
+        let root = s.tree_page(1, &[], 0, 50).unwrap();
+        assert_eq!(root.total_children, 2);
+        assert!(root.children[0].node.truncated);
+        let nested = s.tree_page(1, &[1, 0], 1, 2).unwrap();
+        assert_eq!(nested.total_children, 3);
+        assert_eq!(nested.children[0].node.text, "1");
+        assert_eq!(nested.children[1].node.text, "2");
 
         let mut invalid = br#"{"payload":""#.to_vec();
         invalid.extend(std::iter::repeat_n(b'x', MAX_RECORD));

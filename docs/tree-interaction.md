@@ -11,7 +11,7 @@
 - Node menus can fill the search field with the key or open the containing record in CodeMirror. Search results expand, reveal and highlight the matching pointer.
 - Folding is keyed by physical line and escaped JSON Pointer, scoped to the current session. It is not written into user files or preferences.
 - Record header and per-node folding survive virtualization within the current session.
-- Tree flattening guards at 10,000 rows; huge records remain readable through Raw views within the record preview limit.
+- Tree flattening guards at 10,000 rows. Records above the Raw preview limit use a Rust-backed lazy tree: each request returns at most 50 direct children and 500 bytes per scalar preview, and deeper nodes are fetched only when expanded.
 - Scalar strings preview at most 500 characters; copy preserves the full bounded node value.
 - Keyboard focus indicators and accessible disclosure labels are included. Full arrow-key tree navigation is a future accessibility enhancement.
 
