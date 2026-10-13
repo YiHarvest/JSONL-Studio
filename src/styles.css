@@ -78,6 +78,72 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+.document-draft-pane {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+}
+.document-draft-card {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.document-draft-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.document-draft-card > header > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.document-draft-card > header svg {
+  color: var(--accent);
+}
+.document-draft-card h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.document-draft-card p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.document-draft-card textarea {
+  width: 100%;
+  flex: 1;
+  min-height: 360px;
+  resize: none;
+  padding: 14px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--code);
+  font-size: calc(12px * var(--reader-font-scale, 1));
+  line-height: 1.7;
+  tab-size: 2;
+}
+.document-draft-card > footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.document-draft-card > footer > span {
+  margin-right: auto;
+  color: var(--muted);
+  font: 9px var(--code);
+}
 .search-results {
   min-width: 0;
   min-height: 0;

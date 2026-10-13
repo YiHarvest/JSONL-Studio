@@ -18,7 +18,6 @@ import {
   Braces,
   FilePlus2,
   FolderOpen,
-  ClipboardPaste,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -74,6 +73,8 @@ import i18n, { systemLanguage } from "./i18n";
 import { sample } from "./sample";
 import packageInfo from "../package.json";
 
+const MAX_DOCUMENT_DRAFT = 8 * 1024 * 1024;
+
 export default function App() {
   const { t } = useTranslation();
   const [info, setInfo] = useState<Info | null>(null);
@@ -92,8 +93,8 @@ export default function App() {
   const [stats, setStats] = useState<[number, number] | null>(null);
   const [error, setError] = useState("");
   const [changed, setChanged] = useState(false);
-  const [pasteOpen, setPasteOpen] = useState(false);
-  const [paste, setPaste] = useState("");
+  const [documentDraftOpen, setDocumentDraftOpen] = useState(false);
+  const [documentDraft, setDocumentDraft] = useState("");
   const [query, setQuery] = useState("");
   const [activeHit, setActiveHit] = useState(-1);
   const [editor, setEditor] = useState<{
@@ -131,6 +132,8 @@ export default function App() {
   const history = useRef<number[]>([]);
   const infoRef = useRef(info);
   infoRef.current = info;
+  const documentDraftRef = useRef(documentDraft);
+  documentDraftRef.current = documentDraft;
   const busyRef = useRef(busy);
   busyRef.current = busy;
   const count =
@@ -206,6 +209,8 @@ export default function App() {
       setHits([]);
       setActiveHit(-1);
       setSearchOpen(false);
+      setDocumentDraftOpen(false);
+      setDocumentDraft("");
       states.current.clear();
       history.current = [];
       setDepth(2);
@@ -216,7 +221,7 @@ export default function App() {
   );
   const allowReplace = useCallback(
     async () =>
-      !infoRef.current?.dirty ||
+      (!infoRef.current?.dirty && !documentDraftRef.current.trim()) ||
       (desktop
         ? confirm(t("replaced"), { title: "JSONL Studio", kind: "warning" })
         : window.confirm(t("replaced"))),
@@ -252,14 +257,15 @@ export default function App() {
     }
   }, [openPath, t]);
   const importData = useCallback(
-    async (text: string) => {
-      if (busyRef.current || !(await allowReplace())) return;
+    async (text: string, confirmReplace = true) => {
+      if (busyRef.current || (confirmReplace && !(await allowReplace())))
+        return;
       setBusy(true);
       setError("");
       try {
         await install(await importText(text));
-        setPasteOpen(false);
-        setPaste("");
+        setDocumentDraftOpen(false);
+        setDocumentDraft("");
       } catch (e) {
         setError(String(e));
         setBusy(false);
@@ -267,6 +273,21 @@ export default function App() {
     },
     [install, allowReplace],
   );
+  const createDocument = useCallback(async () => {
+    if (busyRef.current || !(await allowReplace())) return;
+    setBusy(true);
+    setError("");
+    try {
+      setDocumentDraft("");
+      await install(await importText(""));
+      setDocumentDraftOpen(true);
+      if (window.matchMedia("(max-width: 1050px)").matches)
+        setDetailsOpen(false);
+    } catch (e) {
+      setError(String(e));
+      setBusy(false);
+    }
+  }, [allowReplace, install]);
   const applyEdit = async (edit: Edit) => {
     if (!info || busyRef.current) throw new Error("Document is busy");
     setBusy(true);
@@ -419,7 +440,7 @@ export default function App() {
           break;
         case "n":
           e.preventDefault();
-          void importData("");
+          void createDocument();
           break;
         case "f":
           e.preventDefault();
@@ -451,7 +472,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-  }, [openFile, importData, saveDocument]);
+  }, [openFile, createDocument, saveDocument]);
 
   const records = page.records;
   const jumpHit = async (hit: SearchHit) => {
@@ -617,22 +638,13 @@ export default function App() {
             disabled={busy}
             aria-label={t("new")}
             title={`${t("new")} · ${isMac ? "⌘" : "Ctrl+"}N`}
-            onClick={() => void importData("")}
+            onClick={() => void createDocument()}
           >
             <FilePlus2 size={17} />
           </button>
           <button
             className="icon-button titlebar-command"
-            disabled={busy}
-            aria-label={t("paste")}
-            title={t("paste")}
-            onClick={() => setPasteOpen(true)}
-          >
-            <ClipboardPaste size={17} />
-          </button>
-          <button
-            className="icon-button titlebar-command"
-            disabled={!info || busy || changed}
+            disabled={!info || busy || changed || documentDraftOpen}
             aria-label={t("save")}
             title={`${t("save")} · ${isMac ? "⌘" : "Ctrl+"}S`}
             onClick={() => void saveDocument()}
@@ -641,7 +653,7 @@ export default function App() {
           </button>
           <button
             className="icon-button titlebar-command"
-            disabled={!info || busy || changed}
+            disabled={!info || busy || changed || documentDraftOpen}
             aria-label={t("saveAs")}
             title={t("saveAs")}
             onClick={() => void saveDocument(true)}
@@ -824,7 +836,9 @@ export default function App() {
                 </span>
                 <button
                   className="sidebar-primary-action"
-                  disabled={busy || changed || Boolean(editor)}
+                  disabled={
+                    busy || changed || Boolean(editor) || documentDraftOpen
+                  }
                   onClick={() =>
                     setEditor({
                       line: info.totalLines + 1,
@@ -1075,131 +1089,195 @@ export default function App() {
                 </button>
               </div>
             )}
-            <main className="reader" ref={scroll} aria-busy={busy}>
-              {busy && !editor ? (
-                <div className="loading">
-                  <LoaderCircle size={22} className="spin" />
-                  {t("loading")}
-                </div>
-              ) : !records.length ? (
-                <div className="empty-records">{t("noRecords")}</div>
-              ) : mode === "source" ? (
-                <div className="source-panel">
-                  <button
-                    className="source-copy"
-                    onClick={() =>
-                      void copy(records.map((r) => r.source).join(""))
-                    }
-                  >
-                    <Copy size={14} />
-                    {t("copySource")}
-                  </button>
-                  <pre>
-                    <HighlightText
-                      text={records.map((r) => r.source).join("")}
-                      query={query}
-                    />
-                  </pre>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    height: virtual.getTotalSize(),
-                    position: "relative",
-                    width: "100%",
-                  }}
+            {documentDraftOpen ? (
+              <main className="document-draft-pane">
+                <section
+                  className="document-draft-card"
+                  aria-labelledby="document-draft-title"
                 >
-                  {virtual.getVirtualItems().map((item) => (
-                    <div
-                      key={`${item.key}:${treeVersion}`}
-                      data-index={item.index}
-                      ref={virtual.measureElement}
-                      className="virtual-record"
-                      style={{ transform: `translateY(${item.start}px)` }}
-                    >
-                      <RecordCard
-                        record={records[item.index]}
-                        mode={mode}
-                        treeState={stateFor(records[item.index].line)}
-                        depth={depth}
-                        copy={(text) => void copy(text)}
-                        disabled={busy || changed || Boolean(editor)}
-                        query={query}
-                        fontScale={fontScale / 100}
-                        inlineEditor={
-                          editor &&
-                          !editor.insert &&
-                          editor.line === records[item.index].line ? (
-                            <Suspense
-                              fallback={
-                                <div className="loading">{t("loading")}</div>
-                              }
-                            >
-                              <RecordEditor
-                                inline
-                                text={editor.text}
-                                title={`${t("edit")} · L${editor.line}`}
-                                onClose={() => setEditor(null)}
-                                onApply={(text) =>
-                                  applyEdit({
-                                    kind: "replace",
-                                    line: editor.line,
-                                    text,
-                                  })
-                                }
-                              />
-                            </Suspense>
-                          ) : undefined
-                        }
-                        search={(text) => {
-                          setQuery(text);
-                          setSearchOpen(true);
-                          searchInput.current?.focus();
-                        }}
-                        edit={() => {
-                          const record = records[item.index];
-                          let text = record.raw;
-                          try {
-                            text = pretty(parseTree(text));
-                          } catch {
-                            /* repair malformed record */
-                          }
-                          setEditor({
-                            line: record.line,
-                            text,
-                            insert: false,
-                          });
-                        }}
-                        duplicate={() =>
-                          void applyEdit({
-                            kind: "duplicate",
-                            line: records[item.index].line,
-                          }).catch((e) => setError(String(e)))
-                        }
-                        remove={() => {
-                          const line = records[item.index].line;
-                          void (
-                            desktop
-                              ? confirm(t("deleteConfirm"), {
-                                  title: "JSONL Studio",
-                                  kind: "warning",
-                                })
-                              : Promise.resolve(
-                                  window.confirm(t("deleteConfirm")),
-                                )
-                          )
-                            .then((ok) => {
-                              if (ok)
-                                return applyEdit({ kind: "delete", line });
-                            })
-                            .catch((e) => setError(String(e)));
-                        }}
-                      />
+                  <header>
+                    <div>
+                      <FilePlus2 size={19} />
+                      <div>
+                        <h2 id="document-draft-title">{t("newFileTitle")}</h2>
+                        <p>{t("newFileText")}</p>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </main>
+                    <button
+                      className="button"
+                      disabled={!documentDraft}
+                      onClick={() => void copy(documentDraft)}
+                    >
+                      <Copy size={14} />
+                      {t("copyDraft")}
+                    </button>
+                  </header>
+                  <textarea
+                    autoFocus
+                    aria-label={t("documentJsonl")}
+                    spellCheck={false}
+                    value={documentDraft}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (
+                        new TextEncoder().encode(next).length >
+                        MAX_DOCUMENT_DRAFT
+                      ) {
+                        setError(t("draftTooLarge"));
+                        return;
+                      }
+                      setError("");
+                      setDocumentDraft(next);
+                    }}
+                    placeholder={
+                      '{"id": 1, "message": "Hello"}\n{"id": 2, "message": "你好"}'
+                    }
+                  />
+                  <footer>
+                    <span>
+                      {sizeLabel(
+                        new TextEncoder().encode(documentDraft).length,
+                      )}{" "}
+                      / 8 MiB · {t("local")}
+                    </span>
+                    <button
+                      className="button primary"
+                      disabled={busy}
+                      onClick={() => void importData(documentDraft, false)}
+                    >
+                      <Check size={14} />
+                      {busy ? t("loading") : t("apply")}
+                    </button>
+                  </footer>
+                </section>
+              </main>
+            ) : (
+              <main className="reader" ref={scroll} aria-busy={busy}>
+                {busy && !editor ? (
+                  <div className="loading">
+                    <LoaderCircle size={22} className="spin" />
+                    {t("loading")}
+                  </div>
+                ) : !records.length ? (
+                  <div className="empty-records">{t("noRecords")}</div>
+                ) : mode === "source" ? (
+                  <div className="source-panel">
+                    <button
+                      className="source-copy"
+                      onClick={() =>
+                        void copy(records.map((r) => r.source).join(""))
+                      }
+                    >
+                      <Copy size={14} />
+                      {t("copySource")}
+                    </button>
+                    <pre>
+                      <HighlightText
+                        text={records.map((r) => r.source).join("")}
+                        query={query}
+                      />
+                    </pre>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      height: virtual.getTotalSize(),
+                      position: "relative",
+                      width: "100%",
+                    }}
+                  >
+                    {virtual.getVirtualItems().map((item) => (
+                      <div
+                        key={`${item.key}:${treeVersion}`}
+                        data-index={item.index}
+                        ref={virtual.measureElement}
+                        className="virtual-record"
+                        style={{ transform: `translateY(${item.start}px)` }}
+                      >
+                        <RecordCard
+                          record={records[item.index]}
+                          mode={mode}
+                          treeState={stateFor(records[item.index].line)}
+                          depth={depth}
+                          copy={(text) => void copy(text)}
+                          disabled={busy || changed || Boolean(editor)}
+                          query={query}
+                          fontScale={fontScale / 100}
+                          inlineEditor={
+                            editor &&
+                            !editor.insert &&
+                            editor.line === records[item.index].line ? (
+                              <Suspense
+                                fallback={
+                                  <div className="loading">{t("loading")}</div>
+                                }
+                              >
+                                <RecordEditor
+                                  inline
+                                  text={editor.text}
+                                  title={`${t("edit")} · L${editor.line}`}
+                                  onClose={() => setEditor(null)}
+                                  onApply={(text) =>
+                                    applyEdit({
+                                      kind: "replace",
+                                      line: editor.line,
+                                      text,
+                                    })
+                                  }
+                                />
+                              </Suspense>
+                            ) : undefined
+                          }
+                          search={(text) => {
+                            setQuery(text);
+                            setSearchOpen(true);
+                            searchInput.current?.focus();
+                          }}
+                          edit={() => {
+                            const record = records[item.index];
+                            let text = record.raw;
+                            try {
+                              text = pretty(parseTree(text));
+                            } catch {
+                              /* repair malformed record */
+                            }
+                            setEditor({
+                              line: record.line,
+                              text,
+                              insert: false,
+                            });
+                          }}
+                          duplicate={() =>
+                            void applyEdit({
+                              kind: "duplicate",
+                              line: records[item.index].line,
+                            }).catch((e) => setError(String(e)))
+                          }
+                          remove={() => {
+                            const line = records[item.index].line;
+                            void (
+                              desktop
+                                ? confirm(t("deleteConfirm"), {
+                                    title: "JSONL Studio",
+                                    kind: "warning",
+                                  })
+                                : Promise.resolve(
+                                    window.confirm(t("deleteConfirm")),
+                                  )
+                            )
+                              .then((ok) => {
+                                if (ok)
+                                  return applyEdit({ kind: "delete", line });
+                              })
+                              .catch((e) => setError(String(e)));
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </main>
+            )}
             <footer className="statusbar">
               <span>
                 <span className="status-dot" />
@@ -1307,9 +1385,9 @@ export default function App() {
               </button>
             </div>
             <div className="welcome-actions">
-              <button onClick={() => setPasteOpen(true)}>
-                <ClipboardPaste size={15} />
-                {t("paste")}
+              <button onClick={() => void createDocument()}>
+                <FilePlus2 size={15} />
+                {t("new")}
               </button>
               <span>·</span>
               <button onClick={() => void importData(sample)}>
@@ -1352,61 +1430,6 @@ export default function App() {
           >
             {t("discard")}
           </button>
-        </div>
-      )}
-      {pasteOpen && (
-        <div
-          className="modal-backdrop"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setPasteOpen(false);
-          }}
-        >
-          <section
-            className="paste-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="paste-title"
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setPasteOpen(false);
-            }}
-          >
-            <header>
-              <ClipboardPaste size={21} />
-              <h2 id="paste-title">{t("pasteTitle")}</h2>
-              <button
-                className="icon-button"
-                aria-label={t("close")}
-                onClick={() => setPasteOpen(false)}
-              >
-                <X size={18} />
-              </button>
-            </header>
-            <p>{t("pasteText")}</p>
-            <textarea
-              autoFocus
-              aria-label={t("pasteText")}
-              spellCheck={false}
-              value={paste}
-              onChange={(e) => setPaste(e.target.value)}
-              placeholder={
-                '{"id": 1, "message": "Hello"}\n{"id": 2, "message": "你好"}'
-              }
-            />
-            <footer>
-              <span>8 MiB max · {t("local")}</span>
-              <button className="button" onClick={() => setPasteOpen(false)}>
-                {t("cancel")}
-              </button>
-              <button
-                className="button primary"
-                disabled={busy || !paste.trim()}
-                onClick={() => void importData(paste)}
-              >
-                {busy ? t("loading") : t("import")}
-                <ChevronRight size={14} />
-              </button>
-            </footer>
-          </section>
         </div>
       )}
       {toast && (

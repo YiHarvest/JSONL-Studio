@@ -31,7 +31,8 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 ## Reader workspace and search checks
 
 - The reader workspace keeps file metadata in a collapsible left sidebar and full-file search results in a collapsible right sidebar. At a 2,708 × 1,640 viewport with both sidebars open, the center editor measured 2,162 px wide and the document had no horizontal overflow.
-- The second toolbar was removed. Open/new/paste/save commands and whole-file search share the 52 px native titlebar row; view modes, add-record and tree-depth controls live in the collapsible left navigator.
+- The second toolbar was removed. Open/new/save commands and whole-file search share the 52 px native titlebar row; view modes, add-record and tree-depth controls live in the collapsible left navigator.
+- The separate paste command was removed. New opens a bounded 8 MiB inline document draft that accepts JSON, JSON arrays or JSONL, supports native clipboard editing plus Copy all, and hands applied content to the Rust document.
 - Record editing uses an inline CodeMirror instance inside the selected record card. Adding a record from a one-record page navigates directly to the inserted physical line; the document remains dirty until the explicit Save command writes it to disk.
 - At a 900 × 700 viewport, sidebars switch to overlays, the center editor retains the full 900 px layout width, and the single-row titlebar does not overflow.
 - Search starts after a 250 ms input debounce, scans the Rust-backed document in bounded batches, preserves all visible records, and highlights every visible case-insensitive match in Tree, Pretty, Raw, source and result-preview surfaces. Rendering is capped at 1,000 highlights per text surface.
