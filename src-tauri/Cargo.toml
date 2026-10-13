@@ -1,6 +1,6 @@
 [package]
 name = "jsonl-studio"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 description = "A private, local JSONL reader"
 edition = "2021"
 default-run = "jsonl-studio"
