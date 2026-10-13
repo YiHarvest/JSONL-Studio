@@ -108,6 +108,47 @@ test("sample, error isolation, views and range navigation", async ({
   await expect(page.locator(".statusbar")).toContainText("3–5");
 });
 
+test("oversized records are preview-limited instead of reported as invalid", async ({
+  page,
+}) => {
+  test.slow();
+  await page
+    .locator(".titlebar")
+    .getByRole("button", { name: "New", exact: true })
+    .click();
+  const editor = page.getByRole("textbox", {
+    name: "Document JSONL",
+    exact: true,
+  });
+  await editor.fill(`{"payload":"${"x".repeat(2 * 1024 * 1024)}"}`);
+  await page
+    .getByRole("button", { name: "Apply changes", exact: true })
+    .click();
+
+  const record = page.locator('[data-line="1"]');
+  await expect(record).toHaveClass(/limited/);
+  await expect(record).not.toHaveClass(/invalid/);
+  await expect(record.locator(".record-description")).toHaveText(
+    "Record preview limited",
+  );
+  await expect(record.locator(".record-limit")).toContainText(
+    "file validation still streams the complete record",
+  );
+  await expect(page.locator(".validation-fact strong")).toContainText(
+    "0 valid · 0 errors · 1 preview limited",
+  );
+
+  await page
+    .getByRole("button", { name: "Validate file", exact: false })
+    .click();
+  await expect(page.locator(".validation-fact strong")).toContainText(
+    "1 valid · 0 errors",
+  );
+  await expect(page.locator(".validation-fact strong")).not.toContainText(
+    "preview limited",
+  );
+});
+
 test("new file editor copies and imports arrays with lazy tree", async ({
   page,
   context,

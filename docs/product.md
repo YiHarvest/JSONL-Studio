@@ -21,11 +21,11 @@ JSONL Studio is a local desktop JSONL/NDJSON reader and future lightweight edito
 - Opening JSONL never interprets an array record as multiple lines. Explicit paste/import of a JSON array converts its elements into records.
 - A single record may contain duplicate object keys; the tree preserves them. Duplicate-key folding shares the same JSON Pointer.
 - Raw and Original do not reserialize records. Pretty retains original numeric tokens.
-- Original displays the selected source range, including its newline spelling. Invalid UTF-8 is displayed with replacement characters; it is not a byte export.
-- Every IPC page is capped at 1,000 lines and 8 MiB input bytes; record preview is capped at 2 MiB. Oversized lines are marked as unavailable previews, not silently parsed as full records.
+- Original displays the selected source range within the record preview limit, including its newline spelling. Invalid UTF-8 is displayed with replacement characters; it is not a byte export.
+- Every IPC page is capped at 1,000 lines and 8 MiB input bytes; record preview is capped at 2 MiB. Oversized lines are shown as neutral, preview-limited records rather than parse errors and are never silently parsed into a frontend tree.
 - All/custom count is a browsing scope, not an instruction to transfer the entire file into JavaScript. Next continues at the actual returned line.
 - Paste is capped at 8 MiB; larger inputs use disk opening.
-- Valid/error counts initially describe the returned range. Explicit validation scans the file. Oversized previews count as errors under the reader limit.
+- Valid/error counts initially describe parsed records in the returned range, with oversized previews counted separately as preview-limited. Explicit validation streams every complete physical line in Rust without constructing a full JSON value, so oversized records receive a real valid/error result.
 - External changes trigger reload. Reads reject stale indexes. M2 save refuses a changed source.
 - Opening a new input prompts before replacing a non-empty unsaved scratch session.
 - Only the latest requested file is opened when several OS activation paths arrive together; M1 has one active document.

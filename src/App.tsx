@@ -594,6 +594,8 @@ export default function App() {
     }
   };
   const visibleErrors = page.records.filter((r) => r.error).length;
+  const visibleLimited = page.records.filter((r) => r.truncated).length;
+  const visibleValid = page.records.length - visibleErrors - visibleLimited;
   const isMac = navigator.userAgent.includes("Mac");
   return (
     <div
@@ -929,7 +931,7 @@ export default function App() {
                       <span className="valid-color">
                         {stats
                           ? stats[0].toLocaleString()
-                          : page.records.length - visibleErrors}
+                          : visibleValid.toLocaleString()}
                       </span>
                       <small> {t("valid")}</small>
                       <span
@@ -941,6 +943,15 @@ export default function App() {
                         · {stats ? stats[1].toLocaleString() : visibleErrors}
                       </span>
                       <small> {t("errors")}</small>
+                      {!stats && visibleLimited > 0 && (
+                        <>
+                          <span className="limited-color">
+                            {" "}
+                            · {visibleLimited.toLocaleString()}
+                          </span>
+                          <small> {t("limited")}</small>
+                        </>
+                      )}
                     </strong>
                     <button
                       disabled={validating || busy || changed}
@@ -1168,6 +1179,12 @@ export default function App() {
                   <div className="empty-records">{t("noRecords")}</div>
                 ) : mode === "source" ? (
                   <div className="source-panel">
+                    {records.some((record) => record.truncated) && (
+                      <div className="source-limit-notice">
+                        <AlertCircle size={14} />
+                        {t("sourcePreviewLimited")}
+                      </div>
+                    )}
                     <button
                       className="source-copy"
                       onClick={() =>

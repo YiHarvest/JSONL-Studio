@@ -3,6 +3,7 @@ import type { Edit, Info, Page, RecordData, SearchPage } from "./model";
 import { parseTree } from "./model";
 
 export const desktop = isTauri();
+const MAX_RECORD_PREVIEW = 2 * 1024 * 1024;
 // Browser preview is intentionally limited to paste/import. Desktop disk reads
 // always use Rust; no browser file API loads a user's complete file.
 let preview: string[] = [];
@@ -133,13 +134,30 @@ export async function readPage(start: number, count: number): Promise<Page> {
   if (desktop) return invoke("read_page", { start, count });
   const records = preview
     .slice(start - 1, start - 1 + count)
-    .map((raw, index): RecordData => {
+    .map((completeRaw, index): RecordData => {
+      const bytes = new TextEncoder().encode(completeRaw);
+      const truncated = bytes.length > MAX_RECORD_PREVIEW;
+      const raw = truncated
+        ? new TextDecoder().decode(bytes.slice(0, MAX_RECORD_PREVIEW))
+        : completeRaw;
+      const source =
+        raw + (!truncated && start + index < preview.length ? "\n" : "");
+      if (truncated)
+        return {
+          line: start + index,
+          raw,
+          source,
+          json: null,
+          error: null,
+          column: null,
+          truncated: true,
+        };
       try {
         JSON.parse(raw);
         return {
           line: start + index,
           raw,
-          source: raw + (start + index < preview.length ? "\n" : ""),
+          source,
           json: raw,
           error: null,
           column: null,
@@ -149,7 +167,7 @@ export async function readPage(start: number, count: number): Promise<Page> {
         return {
           line: start + index,
           raw,
-          source: raw + (start + index < preview.length ? "\n" : ""),
+          source,
           json: null,
           error: String(e),
           column: null,
