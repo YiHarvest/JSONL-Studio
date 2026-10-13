@@ -12,13 +12,13 @@ Local JSONL/NDJSON reader and editor. No Node.js or Rust installation is needed.
 
 ### Included / 功能
 
-Tree/Pretty/Raw/original views, direct new-file JSON/array/JSONL editing with clipboard actions, collapsible file/search sidebars, compact icon-only language/theme controls, persistent content font scaling, independent invalid-line handling, range navigation, inline CodeMirror record editing, insert/duplicate/delete, live whole-file raw/key/value search with highlighted matches, atomic Save/Save As and local recovery.
+Tree/Pretty/Raw/original views, direct new-file JSON/array/JSONL editing with clipboard actions, bounded oversized-record previews with complete streaming validation, collapsible file/search sidebars, compact icon-only language/theme controls, persistent content font scaling, independent invalid-line handling, range navigation, inline CodeMirror record editing, insert/duplicate/delete, live whole-file raw/key/value search with highlighted matches, atomic Save/Save As and local recovery.
 
-树形与原文阅读、新建文件直接编辑 JSON/数组/JSONL 与草稿复制粘贴、可折叠文件/搜索侧栏、精简的语言/主题图标控件、内容字号缩放、坏行隔离、分页跳转、记录原位编辑和增删复制、实时全文件搜索与命中高亮、安全保存、另存为和本地恢复。
+树形与原文阅读、新建文件直接编辑 JSON/数组/JSONL 与草稿复制粘贴、大记录有界预览与完整流式校验、可折叠文件/搜索侧栏、精简的语言/主题图标控件、内容字号缩放、坏行隔离、分页跳转、记录原位编辑和增删复制、实时全文件搜索与命中高亮、安全保存、另存为和本地恢复。
 
 ### Preview limits / 预览限制
 
-- Record editing: 2 MiB per record; paste: 8 MiB; edit buffer: 32 MiB; search results: up to 500.
+- Record preview/editing: 2 MiB per record; oversized records receive bounded Raw/Original previews while explicit validation streams the complete record in Rust. Paste: 8 MiB; edit buffer: 32 MiB; search results: up to 500.
 - Recovery of disk edits requires the original file to remain unchanged. Unapplied editor drafts are not checkpointed.
 - 1 GiB performance, complete GPU/desktop qualification, GNOME/KDE associations and macOS Finder interactions are not fully certified.
 - Linux AppImage may need FUSE 2. On Arch: `sudo pacman -S fuse2`. If FUSE is unavailable, run with `--appimage-extract-and-run`.
