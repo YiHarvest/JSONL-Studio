@@ -1,4 +1,4 @@
-use crate::core::{parse, Info, Page, Session, MAX_PAGE, MAX_RECORD};
+use crate::core::{parse, validate_json_bytes, Info, Page, Session, MAX_PAGE, MAX_RECORD};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -290,22 +290,30 @@ impl Document {
         Ok(compact)
     }
     pub fn validate(&self) -> Result<(usize, usize), String> {
-        let (mut valid, mut errors, mut line) = (0, 0, 1);
-        loop {
-            let page = self.page(line, 1000)?;
-            for r in page.records {
-                if r.error.is_none() {
-                    valid += 1;
-                } else {
-                    errors += 1;
+        if self.changed() {
+            return Err("File changed on disk; reload before validating".into());
+        }
+        let mut counts = (0, 0);
+        for piece in &self.pieces {
+            match piece {
+                Piece::Source { from, to } => {
+                    let next = self.source.validate_range(*from, *to)?;
+                    counts.0 += next.0;
+                    counts.1 += next.1;
+                }
+                Piece::Added(bytes) => {
+                    if validate_json_bytes(bytes)? {
+                        counts.0 += 1;
+                    } else {
+                        counts.1 += 1;
+                    }
                 }
             }
-            if !page.has_more {
-                break;
-            }
-            line = page.next_line;
         }
-        Ok((valid, errors))
+        if self.changed() {
+            return Err("File changed during validation".into());
+        }
+        Ok(counts)
     }
     fn write(&self, writer: &mut impl Write) -> Result<(), String> {
         let newline: &[u8] = if self.source.info.newline == "CRLF" {
@@ -687,6 +695,17 @@ mod tests {
             .is_err());
         assert!(doc.edit(Edit::Delete { line: 1 }, 9).is_err());
         assert_eq!(doc.page(1, 10).unwrap().records[0].raw, "{}");
+    }
+    #[test]
+    fn oversized_source_record_is_neutral_in_preview_and_validated_in_full() {
+        let mut bytes = br#"{"payload":""#.to_vec();
+        bytes.extend(std::iter::repeat_n(b'x', MAX_RECORD));
+        bytes.extend_from_slice(b"\"}\n");
+        let (_dir, _path, doc) = disk(&bytes);
+        let record = &doc.page(1, 1).unwrap().records[0];
+        assert!(record.truncated);
+        assert!(record.error.is_none());
+        assert_eq!(doc.validate().unwrap(), (1, 0));
     }
     #[test]
     fn failed_stream_write_does_not_touch_source() {

@@ -59,7 +59,7 @@ export function RecordCard({
   }, [record.json]);
   return (
     <article
-      className={`record-card ${record.error ? "invalid" : ""}`}
+      className={`record-card ${record.error ? "invalid" : record.truncated ? "limited" : ""}`}
       data-line={record.line}
     >
       <header className="record-header">
@@ -100,21 +100,28 @@ export function RecordCard({
         <span className="line-label">L{record.line.toLocaleString()}</span>
         {record.error ? (
           <CircleAlert size={13} className="error-color" />
+        ) : record.truncated ? (
+          <CircleAlert size={13} className="limited-color" />
         ) : (
           <Braces size={13} className="muted" />
         )}
         <span className="record-description">
-          {record.error ? t("error") : (parsed?.type ?? "JSON")}
+          {record.error
+            ? t("error")
+            : record.truncated
+              ? t("previewLimited")
+              : (parsed?.type ?? "JSON")}
           {parsed?.children
             ? ` · ${parsed.children.length} ${parsed.type === "array" ? "items" : "keys"}`
             : ""}
         </span>
         <span className="record-bytes">
           {sizeLabel(new TextEncoder().encode(record.raw).length)}
+          {record.truncated ? "+" : ""}
         </span>
         <button
           className="icon-button"
-          aria-label={`${t("copy")} L${record.line}`}
+          aria-label={`${t(record.truncated ? "copyPreview" : "copy")} L${record.line}`}
           onClick={() => copy(record.raw)}
         >
           <Copy size={13} />
@@ -122,7 +129,17 @@ export function RecordCard({
       </header>
       {inlineEditor ??
         (!collapsed &&
-          (record.error ? (
+          (record.truncated ? (
+            <div className="record-limit">
+              <div className="limit-message">
+                <CircleAlert size={15} />
+                <span>{t("previewLimitNotice")}</span>
+              </div>
+              <pre>
+                <HighlightText text={record.raw || "∅"} query={query} />
+              </pre>
+            </div>
+          ) : record.error ? (
             <div className="record-error">
               <div className="error-message">
                 <CircleAlert size={15} />

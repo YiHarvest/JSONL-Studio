@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{de::IgnoredAny, Deserialize, Serialize};
 use std::{
     fs::{File, Metadata},
     io::{BufRead, BufReader, Read, Seek, SeekFrom},
@@ -330,19 +330,73 @@ impl Session {
     }
 
     pub fn validate(&self) -> Result<(usize, usize), String> {
-        let (mut valid, mut errors, mut line) = (0, 0, 1);
-        while line <= self.info.total_lines {
-            let page = self.page(line, 1000)?;
-            for record in &page.records {
-                if record.error.is_some() {
-                    errors += 1;
-                } else {
-                    valid += 1;
+        self.validate_range(1, self.info.total_lines + 1)
+    }
+
+    pub(crate) fn validate_range(&self, from: usize, to: usize) -> Result<(usize, usize), String> {
+        if from == 0 || from > to || to > self.info.total_lines + 1 {
+            return Err("Invalid validation range".into());
+        }
+        if from == to {
+            return Ok((0, 0));
+        }
+        if self.changed() {
+            return Err("File changed on disk; reload before validating".into());
+        }
+        let mut counts = (0, 0);
+        match &self.source {
+            Source::Disk { path, .. } => {
+                let mut file = File::open(path).map_err(|e| e.to_string())?;
+                for line in from..to {
+                    let (start, end) = self.validation_offsets(line);
+                    file.seek(SeekFrom::Start(start))
+                        .map_err(|e| e.to_string())?;
+                    tally(&mut counts, validate_json((&mut file).take(end - start))?);
                 }
             }
-            line = page.next_line;
+            Source::Memory(data) => {
+                for line in from..to {
+                    let (start, end) = self.validation_offsets(line);
+                    tally(
+                        &mut counts,
+                        validate_json(std::io::Cursor::new(&data[start as usize..end as usize]))?,
+                    );
+                }
+            }
         }
-        Ok((valid, errors))
+        if self.changed() {
+            return Err("File changed during validation".into());
+        }
+        Ok(counts)
+    }
+
+    fn validation_offsets(&self, line: usize) -> (u64, u64) {
+        let mut start = self.offsets[line - 1];
+        if line == 1 && self.info.encoding == "UTF-8 BOM" {
+            start += 3;
+        }
+        (start, self.offsets[line])
+    }
+}
+
+pub(crate) fn validate_json_bytes(bytes: &[u8]) -> Result<bool, String> {
+    validate_json(std::io::Cursor::new(bytes))
+}
+
+fn validate_json(reader: impl Read) -> Result<bool, String> {
+    let mut deserializer = serde_json::Deserializer::from_reader(reader);
+    match IgnoredAny::deserialize(&mut deserializer).and_then(|_| deserializer.end()) {
+        Ok(()) => Ok(true),
+        Err(error) if error.is_io() => Err(error.to_string()),
+        Err(_) => Ok(false),
+    }
+}
+
+fn tally(counts: &mut (usize, usize), valid: bool) {
+    if valid {
+        counts.0 += 1;
+    } else {
+        counts.1 += 1;
     }
 }
 
@@ -408,7 +462,6 @@ pub(crate) fn parse(line: usize, bytes: &[u8], truncated: bool) -> Record {
         truncated,
     };
     if truncated {
-        record.error = Some("Record exceeds the 2 MiB preview limit".into());
         return record;
     }
     let text = match std::str::from_utf8(bytes) {
@@ -489,8 +542,30 @@ mod tests {
         let (_f, s) = disk(&data);
         let p = s.page(1, 10).unwrap();
         assert!(p.records[0].truncated);
+        assert!(p.records[0].error.is_none());
+        assert!(p.records[0].json.is_none());
         assert_eq!(p.records[1].error.as_deref(), Some("Invalid UTF-8"));
         assert!(p.records[2].json.is_some());
+        assert_eq!(s.validate().unwrap(), (1, 2));
+    }
+    #[test]
+    fn oversized_valid_record_is_stream_validated_without_becoming_preview_error() {
+        let mut data = br#"{"payload":""#.to_vec();
+        data.extend(std::iter::repeat_n(b'x', MAX_RECORD));
+        data.extend_from_slice(b"\"}\n");
+        let (_f, s) = disk(&data);
+        let record = &s.page(1, 1).unwrap().records[0];
+        assert!(record.truncated);
+        assert!(record.error.is_none());
+        assert!(record.json.is_none());
+        assert_eq!(s.validate().unwrap(), (1, 0));
+
+        let mut invalid = br#"{"payload":""#.to_vec();
+        invalid.extend(std::iter::repeat_n(b'x', MAX_RECORD));
+        invalid.extend_from_slice(b"\"\n");
+        let (_f, s) = disk(&invalid);
+        assert!(s.page(1, 1).unwrap().records[0].truncated);
+        assert_eq!(s.validate().unwrap(), (0, 1));
     }
     #[test]
     fn bounded_pages_and_invalid_ranges() {

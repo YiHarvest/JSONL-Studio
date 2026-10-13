@@ -662,6 +662,10 @@ kbd {
 .file-facts .error-color {
   color: var(--error);
 }
+.limited-color,
+.file-facts .limited-color {
+  color: var(--number);
+}
 .document-bar {
   min-height: 38px;
   padding: 4px 10px;
@@ -949,17 +953,31 @@ kbd {
 .invalid .record-header {
   background: color-mix(in srgb, var(--error) 5%, var(--panel));
 }
-.record-error {
+.limited {
+  border-color: color-mix(in srgb, var(--number) 35%, var(--border));
+}
+.limited .record-header {
+  background: color-mix(in srgb, var(--number) 5%, var(--panel));
+}
+.record-error,
+.record-limit {
   padding: 12px 18px;
 }
-.error-message {
+.error-message,
+.limit-message {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 11px;
+}
+.error-message {
   color: var(--error);
 }
-.record-error pre {
+.limit-message {
+  color: var(--number);
+}
+.record-error pre,
+.record-limit pre {
   margin: 11px 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -970,12 +988,27 @@ kbd {
   overflow: auto;
   color: var(--muted);
 }
+.record-limit pre {
+  max-height: 450px;
+}
 .source-panel {
   position: relative;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 44px 18px 18px;
+}
+.source-limit-notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  color: var(--number);
+  background: color-mix(in srgb, var(--number) 8%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--number) 28%, var(--border));
+  border-radius: 5px;
+  font-size: 10px;
 }
 .source-panel pre {
   font-family: var(--code);

@@ -41,6 +41,15 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 - Frontend strict TypeScript, ESLint, Prettier, Vitest (5 tests), production build and Playwright Chromium (5 scenarios) passed. Playwright covers automatic full-file search, result navigation, visible yellow highlights and font scaling.
 - Rust fmt, all-target/all-feature clippy with `-D warnings`, and all 17 Rust tests passed. No Rust document-content or IPC contract changed in this UI module.
 
+## Oversized record preview fix
+
+- Records larger than 2 MiB are represented as neutral preview-limited records rather than parse failures. The frontend receives only the first 2 MiB, disables edit/duplicate for that record and labels copy as copying the current preview.
+- Initial range statistics exclude preview-limited records from both valid and error counts and show a separate limited count. Explicit file validation streams every complete physical line in Rust with `IgnoredAny`, so syntax after the preview boundary is checked without constructing a full JSON value or transferring it to JavaScript.
+- Rust tests cover a valid oversized record, invalid syntax beyond the 2 MiB preview boundary, invalid UTF-8 isolation and the `Document` validation path. All 19 Rust tests, fmt and all-target clippy with `-D warnings` passed.
+- Frontend ESLint, Prettier, Vitest (5 tests) and production build passed. Playwright Chromium passed all 6 scenarios, including the 2 MiB+ record regression.
+- A 1,200 × 820 Playwright visual check measured equal body client/scroll widths of 1,200 px, a 940 px record card and a 1,200 px titlebar. The limited state, separate validation count and long raw preview rendered without page-level horizontal overflow.
+- Tree/Pretty editing remains unavailable for oversized records because those operations require the complete record in the frontend. Raw and Original surfaces show only the bounded preview; explicit validation is complete but does not make the entire record renderable.
+
 ## Reproduce benchmarks
 
 ```fish
