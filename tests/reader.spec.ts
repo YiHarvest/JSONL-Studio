@@ -156,6 +156,11 @@ test("new file editor copies and imports arrays with lazy tree", async ({
     .click();
   await page.getByLabel("Theme", { exact: true }).selectOption("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".icon-select")).toHaveCount(2);
+  await expect(page.locator(".icon-select select").first()).toHaveCSS(
+    "opacity",
+    "0",
+  );
   await page.getByLabel("Language").selectOption("zh");
   await expect(
     page.getByRole("button", { name: "打开文件", exact: false }),

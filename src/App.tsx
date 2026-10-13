@@ -756,8 +756,11 @@ export default function App() {
               <PanelRight size={17} />
             </button>
           )}
-          <label className="preference">
-            <Languages size={15} />
+          <label
+            className={`preference icon-select ${language !== "system" ? "active" : ""}`}
+            title={t("language")}
+          >
+            <Languages size={16} aria-hidden="true" />
             <select
               aria-label={t("language")}
               value={language}
@@ -775,8 +778,11 @@ export default function App() {
               <option value="en">English</option>
             </select>
           </label>
-          <label className="preference">
-            <SunMoon size={15} />
+          <label
+            className={`preference icon-select ${theme !== "system" ? "active" : ""}`}
+            title={t("theme")}
+          >
+            <SunMoon size={16} aria-hidden="true" />
             <select
               aria-label={t("theme")}
               value={theme}
