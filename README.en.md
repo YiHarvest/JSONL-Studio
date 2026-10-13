@@ -16,7 +16,7 @@ A local desktop reader and lightweight editor for datasets, evaluations, Agent T
 
 </div>
 
-> **Current status:** `v0.1.0-beta.3` adds direct new-file editing, draft clipboard actions and compact language/theme icon controls alongside the collapsible workspace, live whole-file search and font scaling. Release attachments are authoritative; macOS installers are published only after signing and notarization checks.
+> **Current status:** `v0.1.0-beta.4` fixes oversized records being reported as parse failures, adds a neutral preview-limited state and streams complete-record validation in Rust. Release attachments are authoritative; macOS installers are published only after signing and notarization checks.
 
 ## Download and install
 
