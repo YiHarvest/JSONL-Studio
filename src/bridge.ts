@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type {
+  DraftIssue,
   Edit,
   Info,
   Page,
@@ -59,6 +60,40 @@ export async function importText(text: string): Promise<Info> {
     dirty: preview.length > 0,
     revision,
   };
+}
+export async function validateDraft(text: string): Promise<DraftIssue | null> {
+  if (desktop) return invoke("validate_draft", { text });
+  if (text === "") return null;
+  const clean = text.replace(/^\uFEFF/, "").trim();
+  try {
+    JSON.parse(clean);
+    return null;
+  } catch {
+    /* A JSONL document is validated one physical line at a time below. */
+  }
+  const lines = text.split("\n");
+  if (text.endsWith("\n")) lines.pop();
+  if (!lines.length) lines.push("");
+  for (let index = 0; index < lines.length; index++) {
+    let source = lines[index].replace(/\r$/, "");
+    if (index === 0) source = source.replace(/^\uFEFF/, "");
+    try {
+      JSON.parse(source);
+    } catch (error) {
+      const message = String(error);
+      const explicit = /line \d+ column (\d+)/i.exec(message)?.[1];
+      const position = /position (\d+)/i.exec(message)?.[1];
+      return {
+        line: index + 1,
+        column: explicit
+          ? Number(explicit)
+          : position
+            ? Number(position) + 1
+            : 1,
+      };
+    }
+  }
+  return null;
 }
 export async function editRecord(edit: Edit, expected: number): Promise<Info> {
   if (desktop) return invoke("edit_record", { edit, revision: expected });

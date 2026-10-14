@@ -4,7 +4,7 @@ pub mod lazy_tree;
 
 #[cfg(feature = "desktop")]
 mod desktop {
-    use super::core::{Page, Session};
+    use super::core::{DraftIssue, Page, Session};
     use super::document::{Document, DocumentInfo, Edit, SearchPage};
     use super::lazy_tree::TreePage;
     use std::{
@@ -49,6 +49,12 @@ mod desktop {
         let info = document.info();
         *state.session.lock().map_err(|e| e.to_string())? = Some(Arc::new(Mutex::new(document)));
         Ok(info)
+    }
+    #[tauri::command]
+    async fn validate_draft(text: String) -> Result<Option<DraftIssue>, String> {
+        tauri::async_runtime::spawn_blocking(move || Session::validate_draft(&text))
+            .await
+            .map_err(|e| e.to_string())?
     }
     #[tauri::command]
     async fn read_page(
@@ -222,6 +228,7 @@ mod desktop {
             .invoke_handler(tauri::generate_handler![
                 open_file,
                 import_text,
+                validate_draft,
                 read_page,
                 file_changed,
                 validate_file,

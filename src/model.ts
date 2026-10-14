@@ -10,6 +10,10 @@ export interface Info {
   dirty: boolean;
   revision: number;
 }
+export interface DraftIssue {
+  line: number;
+  column: number;
+}
 export type Edit =
   | { kind: "replace" | "insert"; line: number; text: string }
   | { kind: "delete" | "duplicate"; line: number };

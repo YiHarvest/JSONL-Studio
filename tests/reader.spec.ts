@@ -190,6 +190,18 @@ test("new file editor copies and imports arrays with lazy tree", async ({
     .getByRole("button", { name: "New", exact: true })
     .click();
   await expect(editor).toHaveValue("");
+  await editor.fill("{hihi}");
+  await page
+    .getByRole("button", { name: "Apply changes", exact: true })
+    .click();
+  await expect(editor).toBeVisible();
+  await expect(editor).toHaveValue("{hihi}");
+  await expect(page.getByRole("alert")).toContainText(
+    "Cannot apply: line 1, column 2 is not valid JSON.",
+  );
+  await expect(page.locator(".record-card")).toHaveCount(0);
+  await expect(page.locator(".unsaved-label")).toHaveCount(0);
+
   await editor.fill(draft);
   await page.getByRole("button", { name: "Copy all", exact: true }).click();
   await expect

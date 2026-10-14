@@ -45,6 +45,13 @@ pub struct Page {
     pub has_more: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftIssue {
+    pub line: usize,
+    pub column: usize,
+}
+
 enum Source {
     Disk { path: PathBuf, stamp: Stamp },
     Memory(Vec<u8>),
@@ -273,6 +280,41 @@ impl Session {
             offsets,
             info,
         })
+    }
+
+    pub fn validate_draft(text: &str) -> Result<Option<DraftIssue>, String> {
+        if text.len() > MAX_IMPORT {
+            return Err("Draft is limited to 8 MiB".into());
+        }
+        if text.is_empty() {
+            return Ok(None);
+        }
+        let clean = text.trim_start_matches('\u{feff}').trim();
+        if serde_json::from_str::<Box<serde_json::value::RawValue>>(clean).is_ok() {
+            return Ok(None);
+        }
+        let mut lines = text.split('\n').collect::<Vec<_>>();
+        if text.ends_with('\n') {
+            lines.pop();
+        }
+        if lines.is_empty() {
+            lines.push("");
+        }
+        for (index, source) in lines.into_iter().enumerate() {
+            let source = source.strip_suffix('\r').unwrap_or(source);
+            let source = if index == 0 {
+                source.strip_prefix('\u{feff}').unwrap_or(source)
+            } else {
+                source
+            };
+            if let Err(error) = serde_json::from_str::<Box<serde_json::value::RawValue>>(source) {
+                return Ok(Some(DraftIssue {
+                    line: index + 1,
+                    column: error.column().max(1),
+                }));
+            }
+        }
+        Ok(None)
     }
 
     pub fn changed(&self) -> bool {
@@ -566,6 +608,25 @@ mod tests {
             .as_ref()
             .unwrap()
             .contains("9007199254740993"));
+    }
+    #[test]
+    fn draft_validation_accepts_json_and_jsonl_but_rejects_bad_physical_line() {
+        for valid in [
+            "{\"x\":1}",
+            "[{\"x\":1},false]",
+            "{\n  \"x\": 1\n}",
+            "{\"x\":1}\nfalse\n",
+        ] {
+            assert!(Session::validate_draft(valid).unwrap().is_none());
+        }
+        let issue = Session::validate_draft("{\"x\":1}\n{hihi}\n")
+            .unwrap()
+            .unwrap();
+        assert_eq!(issue.line, 2);
+        assert_eq!(issue.column, 2);
+        assert!(Session::validate_draft("").unwrap().is_none());
+        let whitespace = Session::validate_draft(" ").unwrap().unwrap();
+        assert_eq!((whitespace.line, whitespace.column), (1, 1));
     }
     #[test]
     fn external_change_is_rejected() {

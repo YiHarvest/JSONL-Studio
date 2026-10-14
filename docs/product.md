@@ -25,6 +25,7 @@ JSONL Studio is a local desktop JSONL/NDJSON reader and future lightweight edito
 - Every IPC page is capped at 1,000 lines and 8 MiB input bytes; Raw/Original record previews are capped at 2 MiB. Oversized lines are shown as neutral, preview-limited records rather than parse errors. Their Tree view is streamed from Rust in pages of at most 50 direct children with scalar previews capped at 500 bytes; expanding a node requests only that route.
 - All/custom count is a browsing scope, not an instruction to transfer the entire file into JavaScript. Next continues at the actual returned line.
 - Paste is capped at 8 MiB; larger inputs use disk opening.
+- Applying a new-file draft accepts an empty document, one complete JSON value, a JSON array for record conversion, or JSONL whose every physical line is valid JSON. Invalid drafts remain in the editor and do not create a dirty document.
 - Valid/error counts initially describe parsed records in the returned range, with oversized previews counted separately as preview-limited. Explicit validation streams every complete physical line in Rust without constructing a full JSON value, so oversized records receive a real valid/error result.
 - External changes trigger reload. Reads reject stale indexes. M2 save refuses a changed source.
 - Opening a new input prompts before replacing a non-empty unsaved scratch session.
