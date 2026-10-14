@@ -12,9 +12,9 @@ Local JSONL/NDJSON reader and editor. No Node.js or Rust installation is needed.
 
 ### Included / 功能
 
-Tree/Pretty/Raw/original views, direct new-file JSON/array/JSONL editing with clipboard actions, bounded oversized-record previews with complete streaming validation, collapsible file/search sidebars, compact icon-only language/theme controls, persistent content font scaling, independent invalid-line handling, range navigation, inline CodeMirror record editing, insert/duplicate/delete, live whole-file raw/key/value search with highlighted matches, atomic Save/Save As and local recovery.
+Tree/Pretty/Raw/original views, direct new-file JSON/array/JSONL editing with pre-apply validation and clipboard actions, Rust-backed lazy trees for oversized records with complete streaming validation, collapsible file/search sidebars, compact icon-only language/theme controls, persistent content font scaling, independent invalid-line handling, range navigation, inline CodeMirror record editing, insert/duplicate/delete, live whole-file raw/key/value search with highlighted matches, atomic Save/Save As and local recovery.
 
-树形与原文阅读、新建文件直接编辑 JSON/数组/JSONL 与草稿复制粘贴、大记录有界预览与完整流式校验、可折叠文件/搜索侧栏、精简的语言/主题图标控件、内容字号缩放、坏行隔离、分页跳转、记录原位编辑和增删复制、实时全文件搜索与命中高亮、安全保存、另存为和本地恢复。
+树形与原文阅读、新建文件直接编辑 JSON/数组/JSONL、应用前校验与草稿复制粘贴、大记录 Rust 懒加载树与完整流式校验、可折叠文件/搜索侧栏、精简的语言/主题图标控件、内容字号缩放、坏行隔离、分页跳转、记录原位编辑和增删复制、实时全文件搜索与命中高亮、安全保存、另存为和本地恢复。
 
 ### Preview limits / 预览限制
 
