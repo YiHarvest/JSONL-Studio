@@ -46,6 +46,7 @@ import {
 import {
   desktop,
   importText,
+  validateDraft,
   readPage,
   validateFile,
   editRecord,
@@ -258,9 +259,8 @@ export default function App() {
     }
   }, [openPath, t]);
   const importData = useCallback(
-    async (text: string, confirmReplace = true) => {
-      if (busyRef.current || (confirmReplace && !(await allowReplace())))
-        return;
+    async (text: string) => {
+      if (busyRef.current || !(await allowReplace())) return;
       setBusy(true);
       setError("");
       try {
@@ -289,6 +289,28 @@ export default function App() {
       setBusy(false);
     }
   }, [allowReplace, install]);
+  const applyDocumentDraft = useCallback(async () => {
+    if (busyRef.current) return;
+    setBusy(true);
+    setError("");
+    try {
+      const issue = await validateDraft(documentDraft);
+      if (issue) {
+        setError(
+          t("draftInvalid", {
+            line: issue.line,
+            column: issue.column,
+          }),
+        );
+        return;
+      }
+      await install(await importText(documentDraft));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [documentDraft, install, t]);
   const applyEdit = async (edit: Edit) => {
     if (!info || busyRef.current) throw new Error("Document is busy");
     setBusy(true);
@@ -1161,7 +1183,7 @@ export default function App() {
                     <button
                       className="button primary"
                       disabled={busy}
-                      onClick={() => void importData(documentDraft, false)}
+                      onClick={() => void applyDocumentDraft()}
                     >
                       <Check size={14} />
                       {busy ? t("loading") : t("apply")}

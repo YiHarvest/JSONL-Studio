@@ -59,6 +59,12 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 - Playwright covers a 2 MiB+ record in Tree mode, lazy loading through array item 99, switching to bounded Raw and returning to Tree. The full 6-scenario suite passed.
 - Playwright visual checks at 1,200 × 820 and 900 × 700 measured body scroll width equal to client width. The tree measured 938 px and 874 px respectively, retained nested hierarchy and scalar truncation, and produced no page-level horizontal overflow.
 
+## New-file draft validation
+
+- New-file Apply now validates before replacing the empty scratch document. Complete JSON, JSON arrays, valid JSONL and the exact empty document are accepted; malformed or blank physical lines return a 1-based line/column issue.
+- Invalid input remains in the textarea, the draft surface stays open and the document does not gain a record or unsaved marker. The permissive sample-data path remains separate so invalid-line isolation can still be demonstrated.
+- Rust tests cover complete JSON, arrays, multi-line Pretty JSON, JSONL, malformed second lines, empty documents and whitespace-only invalid input. Playwright reproduces `{hihi}` and verifies the localized error plus unchanged document state before applying valid content.
+
 ## Reproduce benchmarks
 
 ```fish

@@ -6,6 +6,7 @@
   "documentJsonl": "文档 JSONL",
   "copyDraft": "复制全部",
   "draftTooLarge": "新建文件草稿不能超过 8 MiB。",
+  "draftInvalid": "无法应用：第 {{line}} 行第 {{column}} 列不是有效的 JSON。",
   "search": "搜索当前文件",
   "searchResults": "搜索结果",
   "searchHint": "输入关键词，自动搜索整个文件",

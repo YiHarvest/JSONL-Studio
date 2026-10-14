@@ -6,6 +6,7 @@
   "documentJsonl": "Document JSONL",
   "copyDraft": "Copy all",
   "draftTooLarge": "A new-file draft cannot exceed 8 MiB.",
+  "draftInvalid": "Cannot apply: line {{line}}, column {{column}} is not valid JSON.",
   "search": "Search current file",
   "searchResults": "Search results",
   "searchHint": "Type to search the entire file",
