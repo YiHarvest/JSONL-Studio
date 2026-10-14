@@ -108,7 +108,7 @@ test("sample, error isolation, views and range navigation", async ({
   await expect(page.locator(".statusbar")).toContainText("3–5");
 });
 
-test("oversized records are preview-limited instead of reported as invalid", async ({
+test("oversized records use a lazy tree and remain bounded in raw views", async ({
   page,
 }) => {
   test.slow();
@@ -120,7 +120,9 @@ test("oversized records are preview-limited instead of reported as invalid", asy
     name: "Document JSONL",
     exact: true,
   });
-  await editor.fill(`{"payload":"${"x".repeat(2 * 1024 * 1024)}"}`);
+  await editor.fill(
+    `{"payload":"${"x".repeat(2 * 1024 * 1024)}","items":[${Array.from({ length: 120 }, (_, index) => index).join(",")}]}`,
+  );
   await page
     .getByRole("button", { name: "Apply changes", exact: true })
     .click();
@@ -131,9 +133,24 @@ test("oversized records are preview-limited instead of reported as invalid", asy
   await expect(record.locator(".record-description")).toHaveText(
     "Record preview limited",
   );
+  await expect(record.locator(".tree-scroll")).toContainText("payload");
+  await expect(record.locator(".tree-scroll")).toContainText("items");
+  await record.locator(".tree-scroll").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(record.locator(".tree-scroll")).toContainText("49");
+  await record.getByRole("button", { name: /Load 50 more/ }).click();
+  await record.locator(".tree-scroll").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(record.locator(".tree-scroll")).toContainText("99");
+
+  await page.getByRole("button", { name: "Raw line", exact: true }).click();
   await expect(record.locator(".record-limit")).toContainText(
-    "file validation still streams the complete record",
+    "switch to Tree to expand the complete structure on demand",
   );
+  await page.getByRole("button", { name: "Tree", exact: true }).click();
+  await expect(record.locator(".tree-scroll")).toContainText("items");
   await expect(page.locator(".validation-fact strong")).toContainText(
     "0 valid · 0 errors · 1 preview limited",
   );

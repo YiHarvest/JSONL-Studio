@@ -1,4 +1,5 @@
 use crate::core::{parse, validate_json_bytes, Info, Page, Session, MAX_PAGE, MAX_RECORD};
+use crate::lazy_tree::{read_tree_page, TreePage};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -314,6 +315,27 @@ impl Document {
             return Err("File changed during validation".into());
         }
         Ok(counts)
+    }
+    pub fn tree_page(
+        &self,
+        line: usize,
+        route: &[usize],
+        offset: usize,
+        limit: usize,
+    ) -> Result<TreePage, String> {
+        if self.changed() {
+            return Err("File changed on disk; reload before reading".into());
+        }
+        let (index, piece_offset) = self.locate(line)?;
+        match &self.pieces[index] {
+            Piece::Source { from, .. } => {
+                self.source
+                    .tree_page(from + piece_offset, route, offset, limit)
+            }
+            Piece::Added(bytes) => {
+                read_tree_page(std::io::Cursor::new(bytes), route, offset, limit)
+            }
+        }
     }
     fn write(&self, writer: &mut impl Write) -> Result<(), String> {
         let newline: &[u8] = if self.source.info.newline == "CRLF" {
@@ -700,12 +722,15 @@ mod tests {
     fn oversized_source_record_is_neutral_in_preview_and_validated_in_full() {
         let mut bytes = br#"{"payload":""#.to_vec();
         bytes.extend(std::iter::repeat_n(b'x', MAX_RECORD));
-        bytes.extend_from_slice(b"\"}\n");
+        bytes.extend_from_slice(b"\",\"items\":[0,1,2]}\n");
         let (_dir, _path, doc) = disk(&bytes);
         let record = &doc.page(1, 1).unwrap().records[0];
         assert!(record.truncated);
         assert!(record.error.is_none());
         assert_eq!(doc.validate().unwrap(), (1, 0));
+        let tree = doc.tree_page(1, &[1], 0, 2).unwrap();
+        assert_eq!(tree.total_children, 3);
+        assert!(tree.has_more);
     }
     #[test]
     fn failed_stream_write_does_not_touch_source() {

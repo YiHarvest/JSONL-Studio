@@ -18,7 +18,7 @@ Tree/Pretty/Raw/original views, direct new-file JSON/array/JSONL editing with cl
 
 ### Preview limits / 预览限制
 
-- Record preview/editing: 2 MiB per record; oversized records receive bounded Raw/Original previews while explicit validation streams the complete record in Rust. Paste: 8 MiB; edit buffer: 32 MiB; search results: up to 500.
+- Raw/Original preview and editing: 2 MiB per record. Oversized records use a Rust-backed lazy tree with 50 children per request and 500-byte scalar previews, while explicit validation streams the complete record. Paste: 8 MiB; edit buffer: 32 MiB; search results: up to 500.
 - Recovery of disk edits requires the original file to remain unchanged. Unapplied editor drafts are not checkpointed.
 - 1 GiB performance, complete GPU/desktop qualification, GNOME/KDE associations and macOS Finder interactions are not fully certified.
 - Linux AppImage may need FUSE 2. On Arch: `sudo pacman -S fuse2`. If FUSE is unavailable, run with `--appimage-extract-and-run`.

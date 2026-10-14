@@ -33,6 +33,7 @@ export function RecordCard({
   query,
   fontScale,
   inlineEditor,
+  lazyTree,
 }: {
   record: RecordData;
   mode: ViewMode;
@@ -47,6 +48,7 @@ export function RecordCard({
   query: string;
   fontScale: number;
   inlineEditor?: ReactNode;
+  lazyTree?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(treeState.collapsed ?? false);
@@ -129,7 +131,9 @@ export function RecordCard({
       </header>
       {inlineEditor ??
         (!collapsed &&
-          (record.truncated ? (
+          (record.truncated && mode === "tree" && lazyTree ? (
+            lazyTree
+          ) : record.truncated ? (
             <div className="record-limit">
               <div className="limit-message">
                 <CircleAlert size={15} />

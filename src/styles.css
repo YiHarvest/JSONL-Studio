@@ -811,6 +811,20 @@ kbd {
   font-family: var(--code);
   font-size: calc(11px * var(--reader-font-scale, 1));
 }
+.lazy-tree-status {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.inline-loader {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+}
 .tree-row {
   height: 28px;
   position: absolute;
