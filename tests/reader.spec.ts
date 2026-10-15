@@ -1,8 +1,37 @@
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto(
+    process.env.PLAYWRIGHT_PAGES === "1" ? "/JSONL-Studio/" : "/",
+  );
   await page.getByLabel("Language").selectOption("en");
+});
+
+test("loads from the configured deployment path", async ({ page }) => {
+  await expect(page).toHaveTitle("JSONL Studio");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.locator(".drop-zone .primary")).toContainText("New");
+  await expect(page.locator(".desktop-command").first()).toBeHidden();
+});
+
+test("web layout fits a mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".drop-zone .primary")).toBeVisible();
+  expect(
+    await page.evaluate(() => ({
+      client: document.body.clientWidth,
+      scroll: document.body.scrollWidth,
+    })),
+  ).toEqual({ client: 390, scroll: 390 });
+
+  await page.getByText("Explore a sample").click();
+  await expect(page.locator(".record-card").first()).toBeVisible();
+  expect(
+    await page.evaluate(() => ({
+      client: document.body.clientWidth,
+      scroll: document.body.scrollWidth,
+    })),
+  ).toEqual({ client: 390, scroll: 390 });
 });
 
 async function openFileDetails(page: import("@playwright/test").Page) {
@@ -233,7 +262,7 @@ test("new file editor copies and imports arrays with lazy tree", async ({
   );
   await page.getByLabel("Language").selectOption("zh");
   await expect(
-    page.getByRole("button", { name: "打开文件", exact: false }),
+    page.getByRole("button", { name: "新建", exact: true }),
   ).toBeVisible();
 });
 

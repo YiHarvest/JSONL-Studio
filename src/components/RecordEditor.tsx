@@ -10,6 +10,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { json } from "@codemirror/lang-json";
 import { useTranslation } from "react-i18next";
 import { X, Check, Pencil } from "lucide-react";
+import { desktop } from "../bridge";
 
 export function RecordEditor({
   text,
@@ -97,7 +98,7 @@ export function RecordEditor({
           <X size={18} />
         </button>
       </header>
-      <p>{t("editHint")}</p>
+      <p>{t(desktop ? "editHint" : "editHintWeb")}</p>
       <div ref={host} className="code-editor" />
       {error && (
         <p className="error-color" role="alert">

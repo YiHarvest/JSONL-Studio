@@ -65,6 +65,14 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 - Invalid input remains in the textarea, the draft surface stays open and the document does not gain a record or unsaved marker. The permissive sample-data path remains separate so invalid-line isolation can still be demonstrated.
 - Rust tests cover complete JSON, arrays, multi-line Pretty JSON, JSONL, malformed second lines, empty documents and whitespace-only invalid input. Playwright reproduces `{hihi}` and verifies the localized error plus unchanged document state before applying valid content.
 
+## GitHub Pages web app
+
+- The web build uses the explicit `/JSONL-Studio/` Vite base path. The normal desktop build retains `/`, so the Pages deployment does not change Tauri asset resolution.
+- Playwright Chromium passed 8 development-server scenarios and the same 8 scenarios against the production Pages subpath. Coverage includes loading under `/JSONL-Studio/`, creating pasted JSON/JSONL, editing, validation, search, lazy trees, preferences, and a 390 x 844 viewport with no body-level horizontal overflow.
+- A browser pass against the production subpath build at 996 x 590 loaded all resources without failed requests or console errors. The body client and scroll widths both measured 996 px; New opened the document draft and two pasted records rendered successfully.
+- Browser mode hides disk-only Open/Save commands and uses an in-memory document capped at 8 MiB. Reloading or closing the page discards the session. Desktop disk reads, oversized-record lazy parsing, recovery, and atomic saves remain Rust-only.
+- The deployment workflow validates lint, formatting, Vitest, the production Pages build, and Playwright before uploading the `dist` artifact. The live URL is `https://yiharvest.github.io/JSONL-Studio/` after the workflow is merged into `dev` and GitHub Pages is enabled with GitHub Actions as its source.
+
 ## Reproduce benchmarks
 
 ```fish

@@ -7,16 +7,23 @@
 面向数据集、评测记录、Agent Trace 与工具日志的本地桌面阅读器和轻量编辑器。基于 **Tauri 2 + Rust + React + TypeScript**，首发面向 macOS Apple Silicon 与 Arch Linux。
 
 [![Checks](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/ci.yml)
+[![Web](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/pages.yml/badge.svg)](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/pages.yml)
 [![Installers](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/release.yml/badge.svg)](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/release.yml)
 [![MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[下载与安装](#下载与安装) · [核心能力](#核心能力) · [系统架构](#系统架构) · [快捷键](#快捷键) · [开发与验证](#开发与验证) · [English](README.en.md)
+[在线使用](#在线使用) · [下载与安装](#下载与安装) · [核心能力](#核心能力) · [系统架构](#系统架构) · [快捷键](#快捷键) · [开发与验证](#开发与验证) · [English](README.en.md)
 
-**[下载预览版 / Download preview](https://github.com/YiHarvest/JSONL-Studio/releases)**
+**[打开网页版](https://yiharvest.github.io/JSONL-Studio/) · [下载预览版](https://github.com/YiHarvest/JSONL-Studio/releases)**
 
 </div>
 
 > **当前状态：** `v0.1.0-beta.5` 支持超过 2 MiB 的大记录按节点懒加载树形结构，并在新建文件应用前校验 JSON/JSONL，非法草稿会保留在编辑区。以 Releases 页面实际附件为准；macOS 下载包仅在签名、公证验证通过后提供。
+
+## 在线使用
+
+访问 **[yiharvest.github.io/JSONL-Studio](https://yiharvest.github.io/JSONL-Studio/)**，点击“新建”后粘贴 JSON、JSON 数组或 JSONL，即可使用树形阅读、格式化、搜索、校验和单条编辑。数据只在当前浏览器内存中处理，不上传到服务器。
+
+网页版用于不超过 8 MiB 的粘贴内容；刷新或关闭页面会清除当前会话，也不会直接打开或保存本机文件。需要处理磁盘文件、大记录懒加载和原子保存时，请使用桌面版。
 
 ## 下载与安装
 
@@ -138,7 +145,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-`npm run dev` 只提供浏览器粘贴/样例预览；磁盘读写使用桌面程序。功能修改分支通过 PR 合入 `dev`，维护者手动合并后自动删分支。
+`npm run dev` 启动浏览器开发模式，`npm run build:web` 生成 GitHub Pages 子路径构建。网页版处理有上限的粘贴/样例数据，磁盘读写使用桌面程序。功能修改分支通过 PR 合入 `dev`，维护者手动合并后自动删分支。
 
 ## 反馈与文档
 

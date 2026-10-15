@@ -409,6 +409,9 @@ kbd {
   height: 27px;
   padding: 0;
 }
+.web .desktop-command {
+  display: none;
+}
 .search-box {
   display: flex;
   align-items: center;
@@ -1353,6 +1356,36 @@ kbd {
   }
   .document-bar {
     padding-inline: 8px;
+  }
+}
+@media (max-width: 700px) {
+  .app.web {
+    min-width: 0;
+  }
+  .web .titlebar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding-inline: 6px;
+    gap: 4px;
+  }
+  .web .titlebar-search {
+    gap: 0;
+  }
+  .web .search-mode-select,
+  .web .zoom-controls {
+    display: none;
+  }
+  .web .welcome {
+    padding: 20px;
+  }
+  .web .welcome h1 {
+    text-align: center;
+  }
+  .web .drop-zone {
+    width: min(430px, 100%);
+    box-sizing: border-box;
+  }
+  .web .statusbar {
+    padding-inline: 10px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
