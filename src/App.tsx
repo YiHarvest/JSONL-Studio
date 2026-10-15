@@ -332,7 +332,7 @@ export default function App() {
             ? Math.min(edit.line, next.totalLines || 1)
             : edit.line;
       await load(Math.max(1, Math.min(target, next.totalLines || 1)), count);
-      setToast(t("appliedUnsaved"));
+      setToast(t(desktop ? "appliedUnsaved" : "appliedWeb"));
     } finally {
       setBusy(false);
     }
@@ -622,7 +622,7 @@ export default function App() {
   const isMac = navigator.userAgent.includes("Mac");
   return (
     <div
-      className={`app ${isMac && desktop ? "mac" : ""}`}
+      className={`app ${desktop ? "" : "web"} ${isMac && desktop ? "mac" : ""}`}
       style={
         {
           "--reader-font-scale": fontScale / 100,
@@ -650,7 +650,7 @@ export default function App() {
           )}
           <span className="titlebar-divider" />
           <button
-            className="icon-button titlebar-command"
+            className="icon-button titlebar-command desktop-command"
             disabled={busy}
             aria-label={t("open")}
             title={`${t("open")} · ${isMac ? "⌘" : "Ctrl+"}O`}
@@ -668,7 +668,7 @@ export default function App() {
             <FilePlus2 size={17} />
           </button>
           <button
-            className="icon-button titlebar-command"
+            className="icon-button titlebar-command desktop-command"
             disabled={!info || busy || changed || documentDraftOpen}
             aria-label={t("save")}
             title={`${t("save")} · ${isMac ? "⌘" : "Ctrl+"}S`}
@@ -677,7 +677,7 @@ export default function App() {
             <Save size={17} />
           </button>
           <button
-            className="icon-button titlebar-command"
+            className="icon-button titlebar-command desktop-command"
             disabled={!info || busy || changed || documentDraftOpen}
             aria-label={t("saveAs")}
             title={t("saveAs")}
@@ -924,7 +924,8 @@ export default function App() {
                       )}
                     </h1>
                     <p title={info.path ?? ""}>
-                      {info.path ?? t("scratchNotice")}
+                      {info.path ??
+                        t(desktop ? "scratchNotice" : "scratchNoticeWeb")}
                     </p>
                   </div>
                 </div>
@@ -1428,23 +1429,30 @@ export default function App() {
               <Braces size={46} strokeWidth={1.4} />
               <span className="mark-line" />
             </div>
-            <span className="eyebrow">YOUR DATA. YOUR DESKTOP.</span>
+            <span className="eyebrow">
+              {desktop
+                ? "YOUR DATA. YOUR DESKTOP."
+                : "YOUR DATA. YOUR BROWSER."}
+            </span>
             <h1>{t("emptyTitle")}</h1>
             <p className="welcome-description">{t("emptyText")}</p>
             <div className="drop-zone">
               <FileJson2 size={27} strokeWidth={1.4} />
-              <strong>{t("drop")}</strong>
+              <strong>{t(desktop ? "drop" : "webStart")}</strong>
               <span>
                 .jsonl <span className="dot-separator">·</span> .ndjson
               </span>
               <button
                 className="button primary"
                 disabled={busy}
-                onClick={() => void openFile()}
+                onClick={() => void (desktop ? openFile() : createDocument())}
               >
-                <FolderOpen size={16} />
-                {t("open")}
-                <kbd>{isMac ? "⌘" : "Ctrl+"}O</kbd>
+                {desktop ? <FolderOpen size={16} /> : <FilePlus2 size={16} />}
+                {t(desktop ? "open" : "new")}
+                <kbd>
+                  {isMac ? "⌘" : "Ctrl+"}
+                  {desktop ? "O" : "N"}
+                </kbd>
               </button>
             </div>
             <div className="welcome-actions">

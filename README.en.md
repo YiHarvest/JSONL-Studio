@@ -7,16 +7,23 @@
 A local desktop reader and lightweight editor for datasets, evaluations, Agent Traces and tool logs. Built with **Tauri 2 + Rust + React + TypeScript**, initially targeting macOS Apple Silicon and Arch Linux.
 
 [![Checks](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/ci.yml)
+[![Web](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/pages.yml/badge.svg)](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/pages.yml)
 [![Installers](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/release.yml/badge.svg)](https://github.com/YiHarvest/JSONL-Studio/actions/workflows/release.yml)
 [![MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Download](#download-and-install) · [Features](#features) · [Architecture](#architecture) · [Shortcuts](#shortcuts) · [Development](#development-and-validation) · [简体中文](README.md)
+[Web app](#web-app) · [Download](#download-and-install) · [Features](#features) · [Architecture](#architecture) · [Shortcuts](#shortcuts) · [Development](#development-and-validation) · [简体中文](README.md)
 
-**[Download preview](https://github.com/YiHarvest/JSONL-Studio/releases)**
+**[Open web app](https://yiharvest.github.io/JSONL-Studio/) · [Download preview](https://github.com/YiHarvest/JSONL-Studio/releases)**
 
 </div>
 
 > **Current status:** `v0.1.0-beta.5` adds node-by-node lazy trees for records over 2 MiB and validates new-file JSON/JSONL before applying, keeping malformed drafts in the editor. Release attachments are authoritative; macOS installers are published only after signing and notarization checks.
+
+## Web app
+
+Open **[yiharvest.github.io/JSONL-Studio](https://yiharvest.github.io/JSONL-Studio/)**, select New, and paste JSON, a JSON array, or JSONL to use tree reading, formatting, search, validation, and record editing. Data stays in the current browser's memory and is never uploaded.
+
+The web app accepts pasted content up to 8 MiB. Reloading or closing the page clears the session, and the web app does not directly open or save local files. Use the desktop app for disk files, lazy loading of large records, and atomic saves.
 
 ## Download and install
 
@@ -136,7 +143,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-`npm run dev` previews paste/sample interactions in the browser. Desktop Rust handles disk reading and writing. Submit each functional module through a PR targeting `dev`; the maintainer merges manually and GitHub deletes the feature branch.
+`npm run dev` starts browser development mode, and `npm run build:web` produces the GitHub Pages subpath build. The web app handles bounded paste/sample data; desktop Rust handles disk reading and writing. Submit each functional module through a PR targeting `dev`; the maintainer merges manually and GitHub deletes the feature branch.
 
 ## Feedback and documents
 

@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "preview": "vite preview",
     "build": "tsc -b && vite build",
+    "build:web": "VITE_BASE_PATH=/JSONL-Studio/ npm run build",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:web": "npm run build:web && PLAYWRIGHT_PAGES=1 playwright test",
     "tauri": "tauri"
   },
   "dependencies": {
