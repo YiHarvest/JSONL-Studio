@@ -11,10 +11,28 @@ pub const MAX_RECORD: usize = 2 * 1024 * 1024;
 pub const MAX_PAGE: usize = 8 * 1024 * 1024;
 const MAX_IMPORT: usize = 8 * 1024 * 1024;
 
+#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Format {
+    Json,
+    Jsonl,
+}
+impl Format {
+    pub(crate) fn from_path(path: &std::path::Path) -> Option<Self> {
+        let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+        match extension.as_str() {
+            "json" => Some(Self::Json),
+            "jsonl" | "ndjson" => Some(Self::Jsonl),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Info {
     pub name: String,
+    pub format: Format,
     pub path: Option<String>,
     pub size: u64,
     pub total_lines: usize,
@@ -73,7 +91,7 @@ impl Stamp {
 
 pub struct Session {
     source: Source,
-    // One u64 start offset per physical line plus EOF sentinel.
+    // One start offset per JSONL physical line, or one for the entire JSON root.
     offsets: Vec<u64>,
     pub info: Info,
 }
@@ -164,6 +182,9 @@ impl Session {
     }
     pub fn ends_with_newline(&self, line: usize) -> Result<bool, String> {
         let end = self.offsets[line];
+        if end == self.offsets[line - 1] {
+            return Ok(false);
+        }
         match &self.source {
             Source::Disk { path, .. } => {
                 let mut file = File::open(path).map_err(|e| e.to_string())?;
@@ -186,9 +207,10 @@ impl Session {
         if bytes.len() > MAX_IMPORT {
             return Err("Recovery input exceeds 8 MiB".into());
         }
-        let (offsets, newline, bom) = index(std::io::Cursor::new(&bytes))?;
+        let (offsets, newline, bom) = index(std::io::Cursor::new(&bytes), Format::Jsonl)?;
         let info = Info {
             name: "Untitled.jsonl".into(),
+            format: Format::Jsonl,
             path: None,
             size: bytes.len() as u64,
             total_lines: offsets.len() - 1,
@@ -205,21 +227,19 @@ impl Session {
     }
     pub fn open(path: PathBuf) -> Result<Self, String> {
         let path = path.canonicalize().map_err(|e| e.to_string())?;
-        let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-        if !["jsonl", "ndjson"].contains(&extension.to_ascii_lowercase().as_str()) {
-            return Err("Choose a .jsonl or .ndjson file".into());
-        }
+        let format = Format::from_path(&path).ok_or("Choose a .json, .jsonl or .ndjson file")?;
         let file = File::open(&path).map_err(|e| e.to_string())?;
         let meta = file.metadata().map_err(|e| e.to_string())?;
         if !meta.is_file() {
             return Err("Not a regular file".into());
         }
         let stamp = Stamp::from(&meta);
-        let (offsets, newline, bom) = index(BufReader::with_capacity(1024 * 1024, file))?;
+        let (offsets, newline, bom) = index(BufReader::with_capacity(1024 * 1024, file), format)?;
         if Stamp::from(&std::fs::metadata(&path).map_err(|e| e.to_string())?) != stamp {
             return Err("File changed while indexing; open it again".into());
         }
         let info = Info {
+            format,
             name: path
                 .file_name()
                 .unwrap_or_default()
@@ -264,9 +284,10 @@ impl Session {
             }
             Err(_) => text.into_bytes(),
         };
-        let (offsets, newline, bom) = index(std::io::Cursor::new(&bytes))?;
+        let (offsets, newline, bom) = index(std::io::Cursor::new(&bytes), Format::Jsonl)?;
         let info = Info {
             name: "Untitled.jsonl".into(),
+            format: Format::Jsonl,
             path: None,
             size: bytes.len() as u64,
             total_lines: offsets.len() - 1,
@@ -481,7 +502,7 @@ fn tally(counts: &mut (usize, usize), valid: bool) {
     }
 }
 
-fn index(mut reader: impl BufRead) -> Result<(Vec<u64>, String, bool), String> {
+fn index(mut reader: impl BufRead, format: Format) -> Result<(Vec<u64>, String, bool), String> {
     let mut offsets = vec![0];
     let mut position = 0u64;
     let (mut lf, mut crlf) = (false, false);
@@ -501,19 +522,18 @@ fn index(mut reader: impl BufRead) -> Result<(Vec<u64>, String, bool), String> {
             } else {
                 lf = true;
             }
-            offsets.push(position + at as u64 + 1);
+            if format == Format::Jsonl {
+                offsets.push(position + at as u64 + 1);
+            }
         }
         previous = *buf.last().unwrap();
         let len = buf.len();
         position += len as u64;
         reader.consume(len);
     }
-    if *offsets.last().unwrap() != position {
+    // Empty JSON is one invalid root; empty JSONL has no physical lines.
+    if format == Format::Json || *offsets.last().unwrap() != position {
         offsets.push(position);
-    }
-    // Empty file has no records; a final newline does not create an extra line.
-    if position == 0 {
-        offsets = vec![0];
     }
     let newline = match (lf, crlf) {
         (true, true) => "Mixed",

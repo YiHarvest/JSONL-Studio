@@ -1,5 +1,6 @@
 export interface Info {
   name: string;
+  format: "json" | "jsonl";
   path: string | null;
   size: number;
   totalLines: number;

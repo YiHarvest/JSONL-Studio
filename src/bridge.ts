@@ -13,23 +13,76 @@ import { parseTree } from "./model";
 
 export const desktop = isTauri();
 const MAX_RECORD_PREVIEW = 2 * 1024 * 1024;
-// Browser preview is intentionally limited to paste/import. Desktop disk reads
-// always use Rust; no browser file API loads a user's complete file.
+export const MAX_WEB_FILE = 8 * 1024 * 1024;
+// Desktop disk reads always use Rust. Browser sessions have a separate cap.
 let preview: string[] = [];
 let revision = 0;
+const scratchMetadata = {
+  name: "Untitled.jsonl",
+  format: "jsonl",
+  modified: null,
+  newline: "LF",
+  encoding: "UTF-8",
+  scratch: true,
+} as const;
+let metadata: Pick<Info, keyof typeof scratchMetadata> = scratchMetadata;
+const encoder = new TextEncoder();
+
+function sourceAt(index: number): string {
+  const source = preview[index];
+  return metadata.format === "jsonl" &&
+    index < preview.length - 1 &&
+    !source.endsWith("\n")
+    ? source + (metadata.newline === "CRLF" ? "\r\n" : "\n")
+    : source;
+}
+function rawRecord(source: string, line: number): string {
+  return (line === 1 ? source.replace(/^\uFEFF/, "") : source).replace(
+    /\r?\n$|\r$/,
+    "",
+  );
+}
+function physicalLines(source: string): string[] {
+  return source.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+}
 function previewInfo(): Info {
   return {
-    name: "Untitled.jsonl",
+    ...metadata,
     path: null,
-    size: new TextEncoder().encode(preview.join("\n")).length,
+    size: preview.reduce(
+      (size, _, index) => size + encoder.encode(sourceAt(index)).length,
+      0,
+    ),
     totalLines: preview.length,
-    modified: null,
-    newline: "LF",
-    encoding: "UTF-8",
-    scratch: true,
-    dirty: preview.length > 0 || revision > 0,
+    dirty: (metadata.scratch && preview.length > 0) || revision > 0,
     revision,
   };
+}
+export async function openBrowserFile(file: File): Promise<Info> {
+  if (desktop) throw new Error("Use the native file picker");
+  if (file.size > MAX_WEB_FILE) throw new Error("File exceeds 8 MiB");
+  const extension = file.name
+    .match(/\.(json|jsonl|ndjson)$/i)?.[1]
+    .toLowerCase();
+  if (!extension) throw new Error("Choose a .json, .jsonl or .ndjson file");
+  const format = extension === "json" ? "json" : "jsonl";
+  const source = new TextDecoder("utf-8", {
+    fatal: true,
+    ignoreBOM: true,
+  }).decode(await file.arrayBuffer());
+  const crlf = source.includes("\r\n");
+  const lf = /(^|[^\r])\n/.test(source);
+  metadata = {
+    name: file.name,
+    format,
+    modified: file.lastModified / 1000,
+    newline: crlf ? (lf ? "Mixed" : "CRLF") : "LF",
+    encoding: source.startsWith("\uFEFF") ? "UTF-8 BOM" : "UTF-8",
+    scratch: false,
+  };
+  preview = format === "json" ? [source] : physicalLines(source);
+  revision = 0;
+  return { ...previewInfo(), size: file.size };
 }
 export async function importText(text: string): Promise<Info> {
   if (desktop) return invoke("import_text", { text });
@@ -46,20 +99,13 @@ export async function importText(text: string): Promise<Info> {
   } catch {
     /* Independent line parsing below. */
   }
-  preview = normalized ? normalized.replace(/\r?\n$/, "").split("\n") : [];
-  revision = 0;
-  return {
-    name: "Untitled.jsonl",
-    path: null,
-    size: new TextEncoder().encode(normalized).length,
-    totalLines: preview.length,
-    modified: null,
+  metadata = {
+    ...scratchMetadata,
     newline: text.includes("\r\n") ? "CRLF" : "LF",
-    encoding: "UTF-8",
-    scratch: true,
-    dirty: preview.length > 0,
-    revision,
   };
+  preview = physicalLines(normalized);
+  revision = 0;
+  return previewInfo();
 }
 export async function validateDraft(text: string): Promise<DraftIssue | null> {
   if (desktop) return invoke("validate_draft", { text });
@@ -98,14 +144,27 @@ export async function validateDraft(text: string): Promise<DraftIssue | null> {
 export async function editRecord(edit: Edit, expected: number): Promise<Info> {
   if (desktop) return invoke("edit_record", { edit, revision: expected });
   if (expected !== revision) throw new Error("Document changed");
+  if (
+    metadata.format === "json" &&
+    (edit.kind !== "replace" || edit.line !== 1)
+  )
+    throw new Error("A JSON file must contain exactly one root value");
   const index = edit.line - 1;
   if ("text" in edit) {
     JSON.parse(edit.text);
-    const raw = compactJson(edit.text);
+    const raw =
+      metadata.format === "json"
+        ? (metadata.encoding === "UTF-8 BOM" ? "\uFEFF" : "") + edit.text
+        : compactJson(edit.text);
     if (edit.kind === "insert") preview.splice(index, 0, raw);
     else preview[index] = raw;
   } else if (edit.kind === "delete") preview.splice(index, 1);
-  else preview.splice(index + 1, 0, preview[index]);
+  else
+    preview.splice(
+      index + 1,
+      0,
+      index === 0 ? preview[index].replace(/^\uFEFF/, "") : preview[index],
+    );
   revision++;
   return previewInfo();
 }
@@ -136,7 +195,7 @@ export async function searchDocument(
   const needle = query.toLowerCase();
   const end = Math.min(start + 2000, preview.length + 1);
   for (let line = start; line < end; line++) {
-    const raw = preview[line - 1];
+    const raw = rawRecord(preview[line - 1], line);
     if (mode === "raw") {
       if (raw.toLowerCase().includes(needle))
         hits.push({ line, pointer: "", preview: raw.slice(0, 160) });
@@ -177,14 +236,15 @@ export async function readPage(start: number, count: number): Promise<Page> {
   if (desktop) return invoke("read_page", { start, count });
   const records = preview
     .slice(start - 1, start - 1 + count)
-    .map((completeRaw, index): RecordData => {
-      const bytes = new TextEncoder().encode(completeRaw);
+    .map((_, index): RecordData => {
+      const line = start + index;
+      const complete = sourceAt(line - 1);
+      const bytes = encoder.encode(complete);
       const truncated = bytes.length > MAX_RECORD_PREVIEW;
-      const raw = truncated
+      const source = truncated
         ? new TextDecoder().decode(bytes.slice(0, MAX_RECORD_PREVIEW))
-        : completeRaw;
-      const source =
-        raw + (!truncated && start + index < preview.length ? "\n" : "");
+        : complete;
+      const raw = rawRecord(source, line);
       if (truncated)
         return {
           line: start + index,
@@ -224,9 +284,9 @@ export async function readPage(start: number, count: number): Promise<Page> {
 export async function validateFile(): Promise<[number, number]> {
   if (desktop) return invoke("validate_file");
   let valid = 0;
-  for (const raw of preview) {
+  for (let index = 0; index < preview.length; index++) {
     try {
-      JSON.parse(raw);
+      JSON.parse(rawRecord(preview[index], index + 1));
       valid++;
     } catch {
       /* count below */
@@ -241,7 +301,7 @@ export async function readTreeNode(
   limit = 50,
 ): Promise<TreePage> {
   if (desktop) return invoke("read_tree_node", { line, route, offset, limit });
-  let node = parseTree(preview[line - 1]);
+  let node = parseTree(rawRecord(preview[line - 1], line));
   for (const index of route) {
     const child = node.children?.[index];
     if (!child) throw new Error("Tree path not found");

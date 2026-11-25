@@ -73,6 +73,12 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 - Browser mode hides disk-only Open/Save commands and uses an in-memory document capped at 8 MiB. Reloading or closing the page discards the session. Desktop disk reads, oversized-record lazy parsing, recovery, and atomic saves remain Rust-only.
 - The deployment workflow validates lint, formatting, Vitest, the production Pages build, and Playwright before uploading the `dist` artifact. The live URL is `https://yiharvest.github.io/JSONL-Studio/` after the workflow is merged into `dev` and GitHub Pages is enabled with GitHub Actions as its source.
 
+## Opening JSON files
+
+- `.json` opens as one root value, including multiline objects and arrays. `.jsonl` and `.ndjson` still open one record per physical line. Desktop JSON root edits save atomically to `.json`, retaining the supplied numeric tokens; large roots use the existing 2 MiB preview and lazy tree.
+- The web file picker accepts all three extensions up to 8 MiB, with no writeback to disk. Frontend lint, formatting, unit tests and builds passed. Playwright Chromium passed 10 scenarios each on the dev server and the production Pages subpath, including the picker, multiline JSON editing, large integer and exponent spelling, NDJSON blank-line isolation, and rejection above the web size limit.
+- The desktop file picker, native activation code, and bundle associations accept `.json`. macOS Finder and Linux file-manager association behavior still require verification on the installed packages.
+
 ## Reproduce benchmarks
 
 ```fish

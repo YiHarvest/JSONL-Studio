@@ -6,5 +6,5 @@ Exec=jsonl-studio %F
 Icon=jsonl-studio
 Terminal=false
 Categories=Development;Utility;
-MimeType=application/x-ndjson;application/jsonl;
+MimeType=application/x-ndjson;application/jsonl;application/json;
 StartupNotify=true

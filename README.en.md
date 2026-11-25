@@ -21,9 +21,11 @@ A local desktop reader and lightweight editor for datasets, evaluations, Agent T
 
 ## Web app
 
-Open **[yiharvest.github.io/JSONL-Studio](https://yiharvest.github.io/JSONL-Studio/)**, select New, and paste JSON, a JSON array, or JSONL to use tree reading, formatting, search, validation, and record editing. Data stays in the current browser's memory and is never uploaded.
+Visit **[yiharvest.github.io/JSONL-Studio](https://yiharvest.github.io/JSONL-Studio/)** and select Open to choose a local `.json`, `.jsonl`, or `.ndjson` file. You can also select New to paste data. Data stays in the current browser's memory and is never uploaded.
 
-The web app accepts pasted content up to 8 MiB. Reloading or closing the page clears the session, and the web app does not directly open or save local files. Use the desktop app for disk files, lazy loading of large records, and atomic saves.
+The web app accepts files and pasted content up to 8 MiB. Reloading or closing the page clears the session. Use the desktop app to open larger files or save changes to disk.
+
+Opening a `.json` file keeps its object, array, or scalar as one root value, even when it spans multiple lines. `.jsonl` and `.ndjson` still use one record per physical line. The desktop app saves edited JSON files as `.json`.
 
 ## Download and install
 
@@ -143,7 +145,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-`npm run dev` starts browser development mode, and `npm run build:web` produces the GitHub Pages subpath build. The web app handles bounded paste/sample data; desktop Rust handles disk reading and writing. Submit each functional module through a PR targeting `dev`; the maintainer merges manually and GitHub deletes the feature branch.
+`npm run dev` starts browser development mode, and `npm run build:web` produces the GitHub Pages subpath build. The web app handles selected files and pasted content in memory; desktop Rust handles disk reading and writing. Submit each functional module through a PR targeting `dev`; the maintainer merges manually and GitHub deletes the feature branch.
 
 ## Feedback and documents
 

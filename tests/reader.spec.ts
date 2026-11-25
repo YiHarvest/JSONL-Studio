@@ -10,8 +10,62 @@ test.beforeEach(async ({ page }) => {
 test("loads from the configured deployment path", async ({ page }) => {
   await expect(page).toHaveTitle("JSONL Studio");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.locator(".drop-zone .primary")).toContainText("New");
+  await expect(page.locator(".drop-zone .primary")).toContainText("Open");
   await expect(page.locator(".desktop-command").first()).toBeHidden();
+});
+
+test("opens a multiline JSON file as one editable root with its original numeric tokens", async ({
+  page,
+}) => {
+  const source = '[\n  {"id": 9007199254740993},\n  {"id": 1.2300e+02}\n]\n';
+  const chooser = page.waitForEvent("filechooser");
+  await page.locator(".drop-zone .primary").click();
+  await (
+    await chooser
+  ).setFiles({
+    name: "records.JSON",
+    mimeType: "application/json",
+    buffer: Buffer.from(source),
+  });
+  const cards = page.locator(".record-card");
+  await expect(cards).toHaveCount(1);
+  await expect(cards.first()).toContainText("9007199254740993");
+  await expect(cards.first()).toContainText("1.2300e+02");
+  const panel = await openFileDetails(page);
+  await expect(panel).toContainText("records.JSON");
+  await expect(panel).toContainText("1 JSON value");
+  await expect(page.getByRole("button", { name: "Add record" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Duplicate record L1" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit record L1" }).click();
+  await page
+    .getByRole("textbox", { name: "Record JSON", exact: true })
+    .fill('{\n  "changed": true\n}');
+  await page
+    .getByRole("button", { name: "Apply changes", exact: true })
+    .click();
+  await expect(cards.first()).toContainText("changed");
+});
+
+test("keeps NDJSON physical lines and rejects browser files larger than 8 MiB", async ({
+  page,
+}) => {
+  const input = page.locator('input[type="file"]');
+  await input.setInputFiles({
+    name: "large.json",
+    mimeType: "application/json",
+    buffer: Buffer.alloc(8 * 1024 * 1024 + 1, 0x20),
+  });
+  await expect(page.getByRole("alert")).toContainText("exceeds 8 MiB");
+  await input.setInputFiles({
+    name: "stream.ndjson",
+    mimeType: "application/x-ndjson",
+    buffer: Buffer.from('{"first":1}\r\n\r\n{"last":3}\r\n'),
+  });
+  await expect(page.locator(".record-card")).toHaveCount(3);
+  await expect(page.locator('[data-line="2"]')).toHaveClass(/invalid/);
+  await expect(page.locator('[data-line="3"]')).toContainText("last");
 });
 
 test("web layout fits a mobile viewport", async ({ page }) => {
