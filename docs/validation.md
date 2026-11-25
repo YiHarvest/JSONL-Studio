@@ -76,6 +76,7 @@ Arch Linux x86_64, AMD Ryzen 5 4600H (6 cores / 12 threads), approximately 15 Gi
 ## Opening JSON files
 
 - `.json` opens as one root value, including multiline objects and arrays. `.jsonl` and `.ndjson` still open one record per physical line. Desktop JSON root edits save atomically to `.json`, retaining the supplied numeric tokens; large roots use the existing 2 MiB preview and lazy tree.
+- All 25 Rust tests passed on Linux, including standalone JSON save and recovery, malformed roots, and bounded lazy reading.
 - The web file picker accepts all three extensions up to 8 MiB, with no writeback to disk. Frontend lint, formatting, unit tests and builds passed. Playwright Chromium passed 10 scenarios each on the dev server and the production Pages subpath, including the picker, multiline JSON editing, large integer and exponent spelling, NDJSON blank-line isolation, and rejection above the web size limit.
 - The desktop file picker, native activation code, and bundle associations accept `.json`. macOS Finder and Linux file-manager association behavior still require verification on the installed packages.
 
