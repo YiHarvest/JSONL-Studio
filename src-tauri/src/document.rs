@@ -1,4 +1,4 @@
-use crate::core::{parse, validate_json_bytes, Info, Page, Session, MAX_PAGE, MAX_RECORD};
+use crate::core::{parse, validate_json_bytes, Format, Info, Page, Session, MAX_PAGE, MAX_RECORD};
 use crate::lazy_tree::{read_tree_page, TreePage};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -206,6 +206,10 @@ impl Document {
         if self.changed() {
             return Err("Source changed externally; edits cannot be applied".into());
         }
+        if self.source.info.format == Format::Json && !matches!(edit, Edit::Replace { line: 1, .. })
+        {
+            return Err("A JSON file must contain exactly one root value".into());
+        }
         let mut next = self.clone();
         match edit {
             Edit::Replace { line, text } => {
@@ -259,6 +263,10 @@ impl Document {
     fn record_bytes(&self, text: &str) -> Result<Vec<u8>, String> {
         if text.len() > MAX_RECORD {
             return Err("Record editor is limited to 2 MiB".into());
+        }
+        if self.source.info.format == Format::Json {
+            serde_json::from_str::<serde_json::Value>(text).map_err(|e| e.to_string())?;
+            return Ok(text.as_bytes().to_vec());
         }
         // RawValue validates and retains duplicate keys and numeric tokens.
         let value: Box<serde_json::value::RawValue> =
@@ -398,13 +406,12 @@ impl Document {
             .map_err(|e| e.to_string())?;
         let name = path.file_name().ok_or("Invalid destination")?;
         let target = parent.join(name);
-        let extension = target
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        if !["jsonl", "ndjson"].contains(&extension.as_str()) {
-            return Err("Save with a .jsonl or .ndjson extension".into());
+        let format = Format::from_path(&target);
+        if format != Some(self.source.info.format) {
+            return Err(match self.source.info.format {
+                Format::Json => "Save with a .json extension".into(),
+                Format::Jsonl => "Save with a .jsonl or .ndjson extension".into(),
+            });
         }
         if fs::symlink_metadata(&target)
             .map(|m| m.file_type().is_symlink())
@@ -430,7 +437,11 @@ impl Document {
         };
         let mut temp = tempfile::Builder::new()
             .prefix(".jsonl-studio-")
-            .suffix(".jsonl")
+            .suffix(if format == Some(Format::Json) {
+                ".json"
+            } else {
+                ".jsonl"
+            })
             .tempfile_in(&parent)
             .map_err(|e| e.to_string())?;
         if exists {
@@ -661,6 +672,64 @@ mod tests {
         fs::write(&path, bytes).unwrap();
         let document = Document::new(Session::open(path.clone()).unwrap());
         (dir, path, document)
+    }
+
+    #[test]
+    fn json_root_reopens_after_atomic_save_and_keeps_original_tokens() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("input.JSON");
+        let source = "\u{feff}[\r\n  9007199254740993,\r\n  1.2300e+02\r\n]\r\n";
+        fs::write(&path, source).unwrap();
+        let mut doc = Document::new(Session::open(path.clone()).unwrap());
+        let page = doc.page(1, 1000).unwrap();
+        assert_eq!(page.records.len(), 1);
+        assert!(!page.has_more);
+        assert_eq!(page.records[0].source, source);
+        assert_eq!(doc.validate().unwrap(), (1, 0));
+        assert!(doc.edit(Edit::Duplicate { line: 1 }, 0).is_err());
+        assert!(doc.save(dir.path().join("input.jsonl"), false, 0).is_err());
+        let new = "{\r\n  \"id\": 9007199254740993,\r\n  \"exp\": 1.2300e+02\r\n}\r\n";
+        doc.edit(
+            Edit::Replace {
+                line: 1,
+                text: new.into(),
+            },
+            0,
+        )
+        .unwrap();
+        let recovery = dir.path().join("recovery.json");
+        doc.checkpoint(&recovery).unwrap();
+        let mut restored = Document::restore(&recovery).unwrap();
+        restored.save(path.clone(), false, 0).unwrap();
+        assert_eq!(fs::read_to_string(path).unwrap(), format!("\u{feff}{new}"));
+        assert_eq!(
+            restored.page(1, 1000).unwrap().records[0].raw,
+            new.trim_end()
+        );
+        assert_eq!(restored.validate().unwrap(), (1, 0));
+    }
+
+    #[test]
+    fn json_root_handles_empty_invalid_and_large_documents() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("root.json");
+        for bad in ["", "{}\n{}"] {
+            fs::write(&path, bad).unwrap();
+            let doc = Document::new(Session::open(path.clone()).unwrap());
+            assert!(doc.page(1, 10).unwrap().records[0].error.is_some());
+            assert_eq!(doc.validate().unwrap(), (0, 1));
+        }
+        let large = format!("[\n\"{}\",\n9007199254740993\n]", "a".repeat(MAX_RECORD));
+        fs::write(&path, large).unwrap();
+        let doc = Document::new(Session::open(path).unwrap());
+        let page = doc.page(1, 1000).unwrap();
+        assert_eq!(page.records.len(), 1);
+        assert!(page.records[0].truncated);
+        assert_eq!(page.records[0].source.len(), MAX_RECORD);
+        assert_eq!(doc.validate().unwrap(), (1, 0));
+        let tree = doc.tree_page(1, &[], 1, 1).unwrap();
+        assert_eq!(tree.total_children, 2);
+        assert_eq!(tree.children[0].node.text, "9007199254740993");
     }
     #[test]
     fn edit_sequence_save_preserves_untouched_bytes_and_numbers() {

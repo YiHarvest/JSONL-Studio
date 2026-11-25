@@ -21,6 +21,7 @@ import { JsonTree, type TreeState } from "./tree/JsonTree";
 
 export function RecordCard({
   record,
+  singleRoot,
   mode,
   treeState,
   depth,
@@ -36,6 +37,7 @@ export function RecordCard({
   lazyTree,
 }: {
   record: RecordData;
+  singleRoot: boolean;
   mode: ViewMode;
   treeState: TreeState;
   depth: number;
@@ -73,22 +75,26 @@ export function RecordCard({
         >
           <Pencil size={13} />
         </button>
-        <button
-          className="icon-button"
-          disabled={disabled || record.truncated}
-          aria-label={`${t("duplicate")} L${record.line}`}
-          onClick={duplicate}
-        >
-          <CopyPlus size={13} />
-        </button>
-        <button
-          className="icon-button"
-          disabled={disabled}
-          aria-label={`${t("delete")} L${record.line}`}
-          onClick={remove}
-        >
-          <Trash2 size={13} />
-        </button>
+        {!singleRoot && (
+          <>
+            <button
+              className="icon-button"
+              disabled={disabled || record.truncated}
+              aria-label={`${t("duplicate")} L${record.line}`}
+              onClick={duplicate}
+            >
+              <CopyPlus size={13} />
+            </button>
+            <button
+              className="icon-button"
+              disabled={disabled}
+              aria-label={`${t("delete")} L${record.line}`}
+              onClick={remove}
+            >
+              <Trash2 size={13} />
+            </button>
+          </>
+        )}
         <button
           className={`disclosure ${collapsed ? "" : "opened"}`}
           aria-label={`${collapsed ? t("expand") : t("collapse")} ${record.line}`}
@@ -99,7 +105,9 @@ export function RecordCard({
         >
           <ChevronRight size={14} />
         </button>
-        <span className="line-label">L{record.line.toLocaleString()}</span>
+        <span className="line-label">
+          {singleRoot ? "JSON" : `L${record.line.toLocaleString()}`}
+        </span>
         {record.error ? (
           <CircleAlert size={13} className="error-color" />
         ) : record.truncated ? (

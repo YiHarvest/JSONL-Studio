@@ -21,9 +21,11 @@
 
 ## 在线使用
 
-访问 **[yiharvest.github.io/JSONL-Studio](https://yiharvest.github.io/JSONL-Studio/)**，点击“新建”后粘贴 JSON、JSON 数组或 JSONL，即可使用树形阅读、格式化、搜索、校验和单条编辑。数据只在当前浏览器内存中处理，不上传到服务器。
+访问 **[yiharvest.github.io/JSONL-Studio](https://yiharvest.github.io/JSONL-Studio/)**，点击“打开”选择本地 `.json`、`.jsonl` 或 `.ndjson` 文件，也可以点击“新建”后粘贴数据。数据只在当前浏览器内存中处理，不上传到服务器。
 
-网页版用于不超过 8 MiB 的粘贴内容；刷新或关闭页面会清除当前会话，也不会直接打开或保存本机文件。需要处理磁盘文件、大记录懒加载和原子保存时，请使用桌面版。
+网页版支持不超过 8 MiB 的文件或粘贴内容。刷新或关闭页面会清除当前会话；网页版不会写入本地文件。需要打开更大的文件或保存编辑时，请使用桌面版。
+
+打开 `.json` 时，多行对象、数组或标量均作为一个根值显示；打开 `.jsonl` 或 `.ndjson` 时，仍按物理行浏览。桌面版可将编辑后的 JSON 保存为 `.json`。
 
 ## 下载与安装
 
@@ -145,7 +147,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-`npm run dev` 启动浏览器开发模式，`npm run build:web` 生成 GitHub Pages 子路径构建。网页版处理有上限的粘贴/样例数据，磁盘读写使用桌面程序。功能修改分支通过 PR 合入 `dev`，维护者手动合并后自动删分支。
+`npm run dev` 启动浏览器开发模式，`npm run build:web` 生成 GitHub Pages 子路径构建。网页版在内存中处理选取的文件和粘贴内容，桌面版由 Rust 读写磁盘。功能修改分支通过 PR 合入 `dev`，维护者手动合并后自动删分支。
 
 ## 反馈与文档
 

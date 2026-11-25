@@ -45,6 +45,8 @@ import {
 } from "lucide-react";
 import {
   desktop,
+  MAX_WEB_FILE,
+  openBrowserFile,
   importText,
   validateDraft,
   readPage,
@@ -129,6 +131,7 @@ export default function App() {
   const states = useRef(new Map<number, TreeState>());
   const scroll = useRef<HTMLDivElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
+  const browserFileInput = useRef<HTMLInputElement>(null);
   const jumpInput = useRef<HTMLInputElement>(null);
   const generation = useRef(0);
   const history = useRef<number[]>([]);
@@ -243,21 +246,49 @@ export default function App() {
     },
     [install, allowReplace],
   );
+  const openWebFile = useCallback(
+    async (file: File) => {
+      if (busyRef.current) return;
+      if (!/\.(?:json|jsonl|ndjson)$/i.test(file.name)) {
+        setError(t("fileType"));
+        return;
+      }
+      if (file.size > MAX_WEB_FILE) {
+        setError(t("webFileLimit"));
+        return;
+      }
+      if (!(await allowReplace())) return;
+      setBusy(true);
+      setError("");
+      try {
+        await install(await openBrowserFile(file));
+      } catch (e) {
+        setError(String(e));
+        setBusy(false);
+      }
+    },
+    [allowReplace, install, t],
+  );
   const openFile = useCallback(async () => {
     if (!desktop) {
-      setToast(t("browser"));
+      browserFileInput.current?.click();
       return;
     }
     try {
       const path = await open({
         multiple: false,
-        filters: [{ name: "JSON Lines", extensions: ["jsonl", "ndjson"] }],
+        filters: [
+          {
+            name: "JSON / JSON Lines",
+            extensions: ["json", "jsonl", "ndjson"],
+          },
+        ],
       });
       if (typeof path === "string") await openPath(path);
     } catch (e) {
       setError(String(e));
     }
-  }, [openPath, t]);
+  }, [openPath]);
   const importData = useCallback(
     async (text: string) => {
       if (busyRef.current || !(await allowReplace())) return;
@@ -349,7 +380,10 @@ export default function App() {
       if (saveAs || !path)
         path = await save({
           defaultPath: current.name,
-          filters: [{ name: "JSON Lines", extensions: ["jsonl", "ndjson"] }],
+          filters:
+            current.format === "json"
+              ? [{ name: "JSON", extensions: ["json"] }]
+              : [{ name: "JSON Lines", extensions: ["jsonl", "ndjson"] }],
         });
       if (!path) return;
       setBusy(true);
@@ -629,6 +663,19 @@ export default function App() {
         } as CSSProperties
       }
     >
+      {!desktop && (
+        <input
+          ref={browserFileInput}
+          type="file"
+          accept=".json,.jsonl,.ndjson"
+          hidden
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = "";
+            if (file) void openWebFile(file);
+          }}
+        />
+      )}
       <header className="titlebar" data-tauri-drag-region>
         <div className="titlebar-leading">
           <div className="brand" data-tauri-drag-region>
@@ -650,7 +697,7 @@ export default function App() {
           )}
           <span className="titlebar-divider" />
           <button
-            className="icon-button titlebar-command desktop-command"
+            className="icon-button titlebar-command"
             disabled={busy}
             aria-label={t("open")}
             title={`${t("open")} · ${isMac ? "⌘" : "Ctrl+"}O`}
@@ -861,27 +908,29 @@ export default function App() {
                   ))}
                 </div>
               </nav>
-              <section className="sidebar-section">
-                <span className="sidebar-section-title">
-                  {t("documentActions")}
-                </span>
-                <button
-                  className="sidebar-primary-action"
-                  disabled={
-                    busy || changed || Boolean(editor) || documentDraftOpen
-                  }
-                  onClick={() =>
-                    setEditor({
-                      line: info.totalLines + 1,
-                      text: "{}",
-                      insert: true,
-                    })
-                  }
-                >
-                  <Plus size={15} />
-                  {t("add")}
-                </button>
-              </section>
+              {info.format !== "json" && (
+                <section className="sidebar-section">
+                  <span className="sidebar-section-title">
+                    {t("documentActions")}
+                  </span>
+                  <button
+                    className="sidebar-primary-action"
+                    disabled={
+                      busy || changed || Boolean(editor) || documentDraftOpen
+                    }
+                    onClick={() =>
+                      setEditor({
+                        line: info.totalLines + 1,
+                        text: "{}",
+                        insert: true,
+                      })
+                    }
+                  >
+                    <Plus size={15} />
+                    {t("add")}
+                  </button>
+                </section>
+              )}
               {mode === "tree" && (
                 <section className="sidebar-section">
                   <span className="sidebar-section-title">
@@ -925,7 +974,13 @@ export default function App() {
                     </h1>
                     <p title={info.path ?? ""}>
                       {info.path ??
-                        t(desktop ? "scratchNotice" : "scratchNoticeWeb")}
+                        t(
+                          desktop
+                            ? "scratchNotice"
+                            : info.scratch
+                              ? "scratchNoticeWeb"
+                              : "webFileNotice",
+                        )}
                     </p>
                   </div>
                 </div>
@@ -941,12 +996,16 @@ export default function App() {
                     <span>{t("recordCount")}</span>
                     <strong>
                       {info.totalLines.toLocaleString()}{" "}
-                      <small>{t("lines")}</small>
+                      <small>
+                        {t(info.format === "json" ? "jsonValue" : "lines")}
+                      </small>
                     </strong>
                     <span>
                       {info.modified
                         ? `${t("modified")} ${new Date(info.modified * 1000).toLocaleString()}`
-                        : "JSONL / NDJSON"}
+                        : info.format === "json"
+                          ? "JSON"
+                          : "JSONL / NDJSON"}
                     </span>
                   </div>
                   <div className="validation-fact">
@@ -1242,6 +1301,7 @@ export default function App() {
                         style={{ transform: `translateY(${item.start}px)` }}
                       >
                         <RecordCard
+                          singleRoot={info.format === "json"}
                           record={records[item.index]}
                           mode={mode}
                           treeState={stateFor(records[item.index].line)}
@@ -1440,19 +1500,17 @@ export default function App() {
               <FileJson2 size={27} strokeWidth={1.4} />
               <strong>{t(desktop ? "drop" : "webStart")}</strong>
               <span>
-                .jsonl <span className="dot-separator">·</span> .ndjson
+                .json <span className="dot-separator">·</span> .jsonl{" "}
+                <span className="dot-separator">·</span> .ndjson
               </span>
               <button
                 className="button primary"
                 disabled={busy}
-                onClick={() => void (desktop ? openFile() : createDocument())}
+                onClick={() => void openFile()}
               >
-                {desktop ? <FolderOpen size={16} /> : <FilePlus2 size={16} />}
-                {t(desktop ? "open" : "new")}
-                <kbd>
-                  {isMac ? "⌘" : "Ctrl+"}
-                  {desktop ? "O" : "N"}
-                </kbd>
+                <FolderOpen size={16} />
+                {t("open")}
+                <kbd>{isMac ? "⌘" : "Ctrl+"}O</kbd>
               </button>
             </div>
             <div className="welcome-actions">
